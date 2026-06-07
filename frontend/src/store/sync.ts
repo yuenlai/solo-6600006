@@ -1,6 +1,130 @@
 import { create } from 'zustand';
 import { SyncFile, SyncFolder, Device, SyncConflict, SyncActivity, FileVersion, RecycleBinItem, RestoreResult, DeviceWizardData, SpaceValidationResult, SyncSchedule, ScheduleExecution, ShareLink, LargeFileTransferItem } from '../types';
 
+const now = new Date();
+
+const mockConflicts: SyncConflict[] = [
+  {
+    id: 'conflict-1',
+    fileId: '3',
+    fileName: 'img001.jpg',
+    filePath: '/photos/img001.jpg',
+    localVersion: {
+      id: 'v-local-1',
+      version: 3,
+      size: 3145728,
+      hash: 'localhash1234567890abcdef',
+      createdAt: new Date(now.getTime() - 2 * 3600000).toISOString(),
+      author: '张三',
+      changeType: 'modified',
+      device: 'MacBook Pro',
+    },
+    remoteVersion: {
+      id: 'v-remote-1',
+      version: 4,
+      size: 3670016,
+      hash: 'remotehashabcdef1234567890',
+      createdAt: new Date(now.getTime() - 1 * 3600000).toISOString(),
+      author: '李四',
+      changeType: 'modified',
+      device: 'Windows Desktop',
+    },
+    resolved: false,
+    reason: 'both_modified',
+    reasonDescription: '本地和远程设备在同一时间段内分别修改了该文件，内容存在差异需要手动确认。',
+  },
+  {
+    id: 'conflict-2',
+    fileId: '10',
+    fileName: '项目方案.docx',
+    filePath: '/docs/项目方案.docx',
+    localVersion: {
+      id: 'v-local-2',
+      version: 2,
+      size: 512000,
+      hash: 'doclocal1234567890abcdef',
+      createdAt: new Date(now.getTime() - 5 * 3600000).toISOString(),
+      author: '王五',
+      changeType: 'modified',
+      device: 'MacBook Pro',
+    },
+    remoteVersion: {
+      id: 'v-remote-2',
+      version: 2,
+      size: 524288,
+      hash: 'docremoteabcdef1234567890',
+      createdAt: new Date(now.getTime() - 3 * 3600000).toISOString(),
+      author: '张三',
+      changeType: 'modified',
+      device: 'Ubuntu Server',
+    },
+    resolved: false,
+    reason: 'content_modified',
+    reasonDescription: '文件内容在本地被修改，但远程已有更新版本。',
+  },
+  {
+    id: 'conflict-3',
+    fileId: '11',
+    fileName: 'data_backup.sql',
+    filePath: '/backup/data_backup.sql',
+    localVersion: {
+      id: 'v-local-3',
+      version: 1,
+      size: 10485760,
+      hash: 'sqllocal1234567890abcdef',
+      createdAt: new Date(now.getTime() - 24 * 3600000).toISOString(),
+      author: '李四',
+      changeType: 'deleted',
+      device: 'Windows Desktop',
+    },
+    remoteVersion: {
+      id: 'v-remote-3',
+      version: 2,
+      size: 15728640,
+      hash: 'sqlremoteabcdef1234567890',
+      createdAt: new Date(now.getTime() - 12 * 3600000).toISOString(),
+      author: '王五',
+      changeType: 'modified',
+      device: 'Ubuntu Server',
+    },
+    resolved: false,
+    reason: 'delete_modify_conflict',
+    reasonDescription: '本地已删除该文件，但远程在删除后又进行了修改。',
+  },
+  {
+    id: 'conflict-4',
+    fileId: '12',
+    fileName: 'config.json',
+    filePath: '/config/config.json',
+    localVersion: {
+      id: 'v-local-4',
+      version: 1,
+      size: 2048,
+      hash: 'configlocal1234567890abcd',
+      createdAt: new Date(now.getTime() - 48 * 3600000).toISOString(),
+      author: '张三',
+      changeType: 'added',
+      device: 'MacBook Pro',
+    },
+    remoteVersion: {
+      id: 'v-remote-4',
+      version: 1,
+      size: 3072,
+      hash: 'configremoteabcdef12345678',
+      createdAt: new Date(now.getTime() - 36 * 3600000).toISOString(),
+      author: '李四',
+      changeType: 'added',
+      device: 'Windows Desktop',
+    },
+    resolved: true,
+    resolution: 'remote',
+    reason: 'name_conflict',
+    reasonDescription: '两个不同内容的文件使用了相同的文件名。',
+    resolvedAt: new Date(now.getTime() - 6 * 3600000).toISOString(),
+    resolvedBy: '用户',
+  },
+];
+
 interface VersionHistoryViewState {
   isOpen: boolean;
   fileId: string | null;
@@ -71,7 +195,7 @@ interface SyncState {
 }
 
 export const useSyncStore = create<SyncState>((set, get) => ({
-  files: [], folders: [], devices: [], conflicts: [], activities: [],
+  files: [], folders: [], devices: [], conflicts: [...mockConflicts], activities: [],
   recycleBin: [],
   currentFolder: '/', syncProgress: 0,
   largeFileTransfers: [],

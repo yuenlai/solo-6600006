@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { SyncConflict, FileVersion } from '../types';
 import { formatSize, formatTime, computeVersionDiff } from '../utils/versionUtils';
 
@@ -27,6 +27,27 @@ export const ConflictResolutionCenter: React.FC<Props> = ({ conflicts, onResolve
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [pendingBatchResolution, setPendingBatchResolution] = useState<'local' | 'remote' | 'merge' | null>(null);
+
+  useEffect(() => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      conflicts.forEach(c => {
+        if (c.resolved && next.has(c.id)) {
+          next.delete(c.id);
+        }
+      });
+      return next;
+    });
+    setExpandedId(prev => {
+      if (prev) {
+        const conflict = conflicts.find(c => c.id === prev);
+        if (conflict && conflict.resolved) {
+          return null;
+        }
+      }
+      return prev;
+    });
+  }, [conflicts]);
 
   const filteredConflicts = conflicts.filter(c => {
     if (filter === 'all') return true;
