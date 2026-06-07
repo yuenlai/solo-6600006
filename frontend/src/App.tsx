@@ -357,6 +357,7 @@ const App: React.FC = () => {
   const toggleOfflinePanel = useSyncStore(state => state.toggleOfflinePanel);
   const createSnapshot = useSyncStore(state => state.createSnapshot);
   const restoreSnapshot = useSyncStore(state => state.restoreSnapshot);
+  const restoreSnapshotFiles = useSyncStore(state => state.restoreSnapshotFiles);
   const deleteSnapshot = useSyncStore(state => state.deleteSnapshot);
   const updateSnapshot = useSyncStore(state => state.updateSnapshot);
   const addIgnoreRule = useSyncStore(state => state.addIgnoreRule);
@@ -665,6 +666,7 @@ const App: React.FC = () => {
             directories={storageAnalysis.byDirectory}
             onCreateSnapshot={createSnapshot}
             onRestoreSnapshot={restoreSnapshot}
+            onRestoreSnapshotFiles={restoreSnapshotFiles}
             onDeleteSnapshot={deleteSnapshot}
             onUpdateSnapshot={updateSnapshot}
           />

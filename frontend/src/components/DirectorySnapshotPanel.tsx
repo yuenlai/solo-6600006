@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { DirectorySnapshot, DirectoryStorageItem, RestoreSnapshotResult } from '../types';
+import { DirectorySnapshot, DirectoryStorageItem, RestoreSnapshotResult, SelectiveRestoreSnapshotResult } from '../types';
 
 interface Props {
   snapshots: DirectorySnapshot[];
   directories: DirectoryStorageItem[];
   onCreateSnapshot: (directoryPath: string, directoryName: string, name: string, description?: string) => DirectorySnapshot;
   onRestoreSnapshot: (snapshotId: string) => RestoreSnapshotResult;
+  onRestoreSnapshotFiles: (snapshotId: string, filePaths: string[]) => SelectiveRestoreSnapshotResult;
   onDeleteSnapshot: (snapshotId: string) => void;
   onUpdateSnapshot: (snapshotId: string, updates: Partial<DirectorySnapshot>) => void;
 }
@@ -15,6 +16,7 @@ export const DirectorySnapshotPanel: React.FC<Props> = ({
   directories,
   onCreateSnapshot,
   onRestoreSnapshot,
+  onRestoreSnapshotFiles,
   onDeleteSnapshot,
   onUpdateSnapshot,
 }) => {
@@ -24,10 +26,12 @@ export const DirectorySnapshotPanel: React.FC<Props> = ({
   const [snapshotDescription, setSnapshotDescription] = useState('');
   const [expandedSnapshot, setExpandedSnapshot] = useState<string | null>(null);
   const [restoringId, setRestoringId] = useState<string | null>(null);
+  const [selectiveRestoringId, setSelectiveRestoringId] = useState<string | null>(null);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editDescription, setEditDescription] = useState('');
+  const [selectedFiles, setSelectedFiles] = useState<Record<string, Set<string>>>({});
 
   const showNotification = (type: 'success' | 'error', message: string) => {
     setNotification({ type, message });
@@ -77,6 +81,64 @@ export const DirectorySnapshotPanel: React.FC<Props> = ({
     setTimeout(() => {
       const result = onRestoreSnapshot(snapshotId);
       setRestoringId(null);
+      showNotification(result.success ? 'success' : 'error', result.message);
+    }, 1000);
+  };
+
+  const toggleFileSelection = (snapshotId: string, filePath: string) => {
+    setSelectedFiles(prev => {
+      const snapshotFiles: Set<string> = prev[snapshotId] ? new Set(prev[snapshotId]) : new Set<string>();
+      if (snapshotFiles.has(filePath)) {
+        snapshotFiles.delete(filePath);
+      } else {
+        snapshotFiles.add(filePath);
+      }
+      return { ...prev, [snapshotId]: snapshotFiles };
+    });
+  };
+
+  const toggleSelectAll = (snapshotId: string, files: { path: string }[]) => {
+    setSelectedFiles(prev => {
+      const currentSelected = prev[snapshotId] || new Set<string>();
+      const allSelected = files.length > 0 && currentSelected.size === files.length;
+      if (allSelected) {
+        return { ...prev, [snapshotId]: new Set<string>() };
+      } else {
+        return { ...prev, [snapshotId]: new Set<string>(files.map(f => f.path)) };
+      }
+    });
+  };
+
+  const getSelectedFileCount = (snapshotId: string) => {
+    return selectedFiles[snapshotId]?.size || 0;
+  };
+
+  const isFileSelected = (snapshotId: string, filePath: string) => {
+    return selectedFiles[snapshotId]?.has(filePath) || false;
+  };
+
+  const isAllSelected = (snapshotId: string, files: { path: string }[]) => {
+    const selected = selectedFiles[snapshotId];
+    return files.length > 0 && selected?.size === files.length;
+  };
+
+  const handleSelectiveRestore = async (snapshotId: string) => {
+    const selected = selectedFiles[snapshotId];
+    if (!selected || selected.size === 0) {
+      showNotification('error', '请先选择要恢复的文件');
+      return;
+    }
+    setSelectiveRestoringId(snapshotId);
+    setTimeout(() => {
+      const result = onRestoreSnapshotFiles(snapshotId, Array.from(selected));
+      setSelectiveRestoringId(null);
+      if (result.success) {
+        setSelectedFiles(prev => {
+          const updated = { ...prev };
+          delete updated[snapshotId];
+          return updated;
+        });
+      }
       showNotification(result.success ? 'success' : 'error', result.message);
     }, 1000);
   };
@@ -360,25 +422,71 @@ export const DirectorySnapshotPanel: React.FC<Props> = ({
                     padding: '12px 16px',
                   }}
                 >
-                  <div style={{ fontSize: '13px', fontWeight: 500, marginBottom: '8px', color: '#555' }}>
-                    包含的文件：
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '13px' }}>
+                        <input
+                          type="checkbox"
+                          checked={isAllSelected(snapshot.id, snapshot.files)}
+                          onChange={() => toggleSelectAll(snapshot.id, snapshot.files)}
+                          style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                        />
+                        <span style={{ fontWeight: 500, color: '#555' }}>
+                          全选 ({getSelectedFileCount(snapshot.id)}/{snapshot.files.length})
+                        </span>
+                      </label>
+                    </div>
+                    <button
+                      onClick={() => handleSelectiveRestore(snapshot.id)}
+                      disabled={selectiveRestoringId === snapshot.id || getSelectedFileCount(snapshot.id) === 0}
+                      style={{
+                        padding: '6px 14px',
+                        background: selectiveRestoringId === snapshot.id || getSelectedFileCount(snapshot.id) === 0
+                          ? '#a5d6a7'
+                          : '#4caf50',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: selectiveRestoringId === snapshot.id || getSelectedFileCount(snapshot.id) === 0
+                          ? 'not-allowed'
+                          : 'pointer',
+                        fontSize: '13px',
+                        fontWeight: 500,
+                      }}
+                    >
+                      {selectiveRestoringId === snapshot.id ? '恢复中...' : `恢复选中 (${getSelectedFileCount(snapshot.id)})`}
+                    </button>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     {snapshot.files.map((file, index) => (
                       <div
                         key={index}
+                        onClick={() => toggleFileSelection(snapshot.id, file.path)}
                         style={{
                           display: 'flex',
                           justifyContent: 'space-between',
                           alignItems: 'center',
-                          padding: '8px 12px',
-                          background: '#fff',
-                          borderRadius: '4px',
+                          padding: '10px 12px',
+                          background: isFileSelected(snapshot.id, file.path) ? '#e8f5e9' : '#fff',
+                          borderRadius: '6px',
                           fontSize: '13px',
-                          border: '1px solid #eee',
+                          border: isFileSelected(snapshot.id, file.path)
+                            ? '1px solid #81c784'
+                            : '1px solid #eee',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease',
                         }}
                       >
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <input
+                            type="checkbox"
+                            checked={isFileSelected(snapshot.id, file.path)}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              toggleFileSelection(snapshot.id, file.path);
+                            }}
+                            style={{ cursor: 'pointer', width: '16px', height: '16px', margin: 0 }}
+                          />
                           <span>📄</span>
                           <span style={{ fontFamily: 'monospace' }}>{file.path}</span>
                         </span>

@@ -302,6 +302,15 @@ export interface RestoreSnapshotResult {
   errors?: string[];
 }
 
+export interface SelectiveRestoreSnapshotResult {
+  success: boolean;
+  message: string;
+  restoredCount: number;
+  failedCount: number;
+  restoredFiles: string[];
+  errors: string[];
+}
+
 export type IgnoreRuleType = 'extension' | 'name_pattern' | 'directory';
 
 export interface IgnoreRule {

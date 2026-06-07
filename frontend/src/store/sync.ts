@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { SyncFile, SyncFolder, Device, SyncConflict, SyncActivity, FileVersion, RecycleBinItem, RestoreResult, DeviceWizardData, SpaceValidationResult, SyncSchedule, ScheduleExecution, ShareLink, LargeFileTransferItem, StorageAnalysisData, OfflineChange, SyncProgress, DirectorySnapshot, RestoreSnapshotResult, SnapshotFileItem, IgnoreRule, IgnoreRuleMatchResult, Notification, Workspace, WorkspaceMember, WorkspaceFileActivity, WorkspaceRole } from '../types';
+import { SyncFile, SyncFolder, Device, SyncConflict, SyncActivity, FileVersion, RecycleBinItem, RestoreResult, DeviceWizardData, SpaceValidationResult, SyncSchedule, ScheduleExecution, ShareLink, LargeFileTransferItem, StorageAnalysisData, OfflineChange, SyncProgress, DirectorySnapshot, RestoreSnapshotResult, SelectiveRestoreSnapshotResult, SnapshotFileItem, IgnoreRule, IgnoreRuleMatchResult, Notification, Workspace, WorkspaceMember, WorkspaceFileActivity, WorkspaceRole } from '../types';
 import { offlineStorage } from '../utils/offlineStorage';
 
 const now = new Date();
@@ -409,6 +409,7 @@ interface SyncState {
   setSnapshots: (snapshots: DirectorySnapshot[]) => void;
   createSnapshot: (directoryPath: string, directoryName: string, name: string, description?: string) => DirectorySnapshot;
   restoreSnapshot: (snapshotId: string) => RestoreSnapshotResult;
+  restoreSnapshotFiles: (snapshotId: string, filePaths: string[]) => SelectiveRestoreSnapshotResult;
   deleteSnapshot: (snapshotId: string) => void;
   updateSnapshot: (snapshotId: string, updates: Partial<DirectorySnapshot>) => void;
   ignoreRules: IgnoreRule[];
@@ -1142,6 +1143,70 @@ export const useSyncStore = create<SyncState>((set, get) => ({
         ? `成功恢复 ${restoredCount} 个文件到快照状态`
         : `部分文件恢复失败，成功 ${restoredCount} 个，失败 ${errors.length} 个`,
       restoredCount,
+      errors,
+    };
+  },
+
+  restoreSnapshotFiles: (snapshotId, filePaths) => {
+    const state = get();
+    const snapshot = state.snapshots.find(s => s.id === snapshotId);
+    if (!snapshot) {
+      return {
+        success: false,
+        message: '快照不存在',
+        restoredCount: 0,
+        failedCount: 0,
+        restoredFiles: [],
+        errors: ['快照不存在'],
+      };
+    }
+
+    if (filePaths.length === 0) {
+      return {
+        success: false,
+        message: '请选择要恢复的文件',
+        restoredCount: 0,
+        failedCount: 0,
+        restoredFiles: [],
+        errors: ['未选择任何文件'],
+      };
+    }
+
+    const filesToRestore = snapshot.files.filter(f => filePaths.includes(f.path));
+    const errors: string[] = [];
+    const restoredFiles: string[] = [];
+
+    filesToRestore.forEach(snapshotFile => {
+      try {
+        const activity: SyncActivity = {
+          id: `act-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          fileId: `restored-${snapshotFile.path}`,
+          fileName: snapshotFile.name,
+          filePath: snapshotFile.path,
+          status: 'success',
+          action: 'modify',
+          timestamp: new Date().toISOString(),
+          device: snapshot.device,
+          size: snapshotFile.size,
+        };
+        get().addActivity(activity);
+        restoredFiles.push(snapshotFile.path);
+      } catch (e) {
+        errors.push(`恢复文件 ${snapshotFile.name} 失败`);
+      }
+    });
+
+    const restoredCount = restoredFiles.length;
+    const failedCount = errors.length;
+
+    return {
+      success: failedCount === 0,
+      message: failedCount === 0
+        ? `成功恢复 ${restoredCount} 个文件`
+        : `部分文件恢复失败，成功 ${restoredCount} 个，失败 ${failedCount} 个`,
+      restoredCount,
+      failedCount,
+      restoredFiles,
       errors,
     };
   },
