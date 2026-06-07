@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { SyncFile, SyncFolder, Device, SyncConflict, SyncActivity, FileVersion, RecycleBinItem, RestoreResult, DeviceWizardData, SpaceValidationResult, SyncSchedule, ScheduleExecution, ShareLink, LargeFileTransferItem, StorageAnalysisData } from '../types';
+import { SyncFile, SyncFolder, Device, SyncConflict, SyncActivity, FileVersion, RecycleBinItem, RestoreResult, DeviceWizardData, SpaceValidationResult, SyncSchedule, ScheduleExecution, ShareLink, LargeFileTransferItem, StorageAnalysisData, OfflineChange, SyncProgress } from '../types';
+import { offlineStorage } from '../utils/offlineStorage';
 
 const now = new Date();
 
@@ -175,6 +176,10 @@ interface SyncState {
   shareLinksPanelFileId: string | null;
   largeFileTransfers: LargeFileTransferItem[];
   storageAnalysis: StorageAnalysisData;
+  offlineChanges: OfflineChange[];
+  offlineSyncProgress: SyncProgress;
+  isOfflinePanelOpen: boolean;
+  isOnline: boolean;
   setFiles: (files: SyncFile[]) => void;
   setConflicts: (conflicts: SyncConflict[]) => void;
   resolveConflict: (id: string, resolution: 'local' | 'remote' | 'merge') => void;
@@ -222,6 +227,16 @@ interface SyncState {
   retryLargeFileTransfer: (id: string) => void;
   cancelLargeFileTransfer: (id: string) => void;
   setStorageAnalysis: (data: StorageAnalysisData) => void;
+  setIsOnline: (online: boolean) => void;
+  addOfflineChange: (change: Omit<OfflineChange, 'id' | 'createdAt' | 'status' | 'retryCount'>) => void;
+  updateOfflineChange: (id: string, updates: Partial<OfflineChange>) => void;
+  removeOfflineChange: (id: string) => void;
+  loadOfflineChanges: () => void;
+  startOfflineSync: () => void;
+  retryOfflineChange: (id: string) => void;
+  retryAllFailedOfflineChanges: () => void;
+  clearSyncedOfflineChanges: () => void;
+  toggleOfflinePanel: () => void;
 }
 
 export const useSyncStore = create<SyncState>((set, get) => ({
@@ -230,6 +245,15 @@ export const useSyncStore = create<SyncState>((set, get) => ({
   currentFolder: '/', syncProgress: 0,
   largeFileTransfers: [],
   storageAnalysis: mockStorageAnalysis,
+  offlineChanges: [],
+  offlineSyncProgress: {
+    total: 0,
+    completed: 0,
+    failed: 0,
+    isSyncing: false,
+  },
+  isOfflinePanelOpen: false,
+  isOnline: true,
   versionHistory: {
     isOpen: false,
     fileId: null,
@@ -559,4 +583,172 @@ export const useSyncStore = create<SyncState>((set, get) => ({
     largeFileTransfers: state.largeFileTransfers.filter(t => t.id !== id),
   })),
   setStorageAnalysis: (data) => set({ storageAnalysis: data }),
+
+  setIsOnline: (online) => set({ isOnline: online }),
+
+  addOfflineChange: (change) => {
+    const newChange: OfflineChange = {
+      ...change,
+      id: `offline-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      createdAt: new Date().toISOString(),
+      status: 'pending',
+      retryCount: 0,
+    };
+    offlineStorage.add(newChange);
+    set((state) => ({
+      offlineChanges: [...state.offlineChanges, newChange],
+    }));
+  },
+
+  updateOfflineChange: (id, updates) => {
+    offlineStorage.update(id, updates);
+    set((state) => ({
+      offlineChanges: state.offlineChanges.map((c) =>
+        c.id === id ? { ...c, ...updates } : c
+      ),
+    }));
+  },
+
+  removeOfflineChange: (id) => {
+    offlineStorage.remove(id);
+    set((state) => ({
+      offlineChanges: state.offlineChanges.filter((c) => c.id !== id),
+    }));
+  },
+
+  loadOfflineChanges: () => {
+    const changes = offlineStorage.getAll();
+    set({ offlineChanges: changes });
+  },
+
+  startOfflineSync: () => {
+    const state = get();
+    const pendingChanges = state.offlineChanges.filter(
+      (c) => c.status === 'pending' || c.status === 'failed'
+    );
+
+    if (pendingChanges.length === 0 || !state.isOnline) return;
+
+    set({
+      offlineSyncProgress: {
+        total: pendingChanges.length,
+        completed: 0,
+        failed: 0,
+        isSyncing: true,
+        currentFile: pendingChanges[0].fileName,
+      },
+    });
+
+    let completed = 0;
+    let failed = 0;
+
+    pendingChanges.forEach((change, index) => {
+      setTimeout(() => {
+        const success = Math.random() > 0.15;
+
+        if (success) {
+          completed++;
+          offlineStorage.update(change.id, {
+            status: 'success',
+            syncedAt: new Date().toISOString(),
+          });
+          const activity: SyncActivity = {
+            id: `act-${Date.now()}-${index}`,
+            fileId: change.fileId,
+            fileName: change.fileName,
+            filePath: change.filePath,
+            status: 'success',
+            action: change.action,
+            timestamp: new Date().toISOString(),
+            size: change.size,
+            device: '本地设备',
+          };
+          get().addActivity(activity);
+        } else {
+          failed++;
+          offlineStorage.update(change.id, {
+            status: 'failed',
+            errorMessage: '同步失败，请稍后重试',
+            retryCount: change.retryCount + 1,
+          });
+        }
+
+        const nextChange = pendingChanges[index + 1];
+        set((s) => ({
+          offlineChanges: s.offlineChanges.map((c) => {
+            if (c.id === change.id) {
+              return success
+                ? { ...c, status: 'success' as const, syncedAt: new Date().toISOString() }
+                : { ...c, status: 'failed' as const, errorMessage: '同步失败，请稍后重试', retryCount: c.retryCount + 1 };
+            }
+            return c;
+          }),
+          offlineSyncProgress: {
+            total: pendingChanges.length,
+            completed,
+            failed,
+            isSyncing: index < pendingChanges.length - 1,
+            currentFile: nextChange?.fileName,
+          },
+        }));
+      }, 800 + index * 600);
+    });
+  },
+
+  retryOfflineChange: (id) => {
+    const state = get();
+    const change = state.offlineChanges.find((c) => c.id === id);
+    if (!change || !state.isOnline) return;
+
+    set((s) => ({
+      offlineChanges: s.offlineChanges.map((c) =>
+        c.id === id ? { ...c, status: 'pending', errorMessage: undefined } : c
+      ),
+    }));
+
+    setTimeout(() => {
+      const success = Math.random() > 0.2;
+      if (success) {
+        get().updateOfflineChange(id, {
+          status: 'success',
+          syncedAt: new Date().toISOString(),
+        });
+        const activity: SyncActivity = {
+          id: `act-${Date.now()}`,
+          fileId: change.fileId,
+          fileName: change.fileName,
+          filePath: change.filePath,
+          status: 'success',
+          action: change.action,
+          timestamp: new Date().toISOString(),
+          size: change.size,
+          device: '本地设备',
+        };
+        get().addActivity(activity);
+      } else {
+        get().updateOfflineChange(id, {
+          status: 'failed',
+          errorMessage: '同步失败，请稍后重试',
+          retryCount: change.retryCount + 1,
+        });
+      }
+    }, 800);
+  },
+
+  retryAllFailedOfflineChanges: () => {
+    const state = get();
+    const failedChanges = state.offlineChanges.filter((c) => c.status === 'failed');
+    failedChanges.forEach((c) => get().retryOfflineChange(c.id));
+  },
+
+  clearSyncedOfflineChanges: () => {
+    offlineStorage.clearSynced();
+    set((state) => ({
+      offlineChanges: state.offlineChanges.filter((c) => c.status !== 'success'),
+    }));
+  },
+
+  toggleOfflinePanel: () => {
+    set((state) => ({ isOfflinePanelOpen: !state.isOfflinePanelOpen }));
+  },
 }));

@@ -240,3 +240,35 @@ export interface StorageAnalysisData {
 }
 
 export type StorageViewMode = 'directory' | 'filetype' | 'device';
+
+export type OfflineChangeAction = 'upload' | 'delete' | 'modify';
+export type OfflineChangeStatus = 'pending' | 'syncing' | 'success' | 'failed';
+
+export interface OfflineChange {
+  id: string;
+  fileId: string;
+  fileName: string;
+  filePath: string;
+  action: OfflineChangeAction;
+  size?: number;
+  content?: string;
+  status: OfflineChangeStatus;
+  createdAt: string;
+  syncedAt?: string;
+  errorMessage?: string;
+  retryCount: number;
+}
+
+export interface NetworkStatus {
+  isOnline: boolean;
+  lastOnline?: string;
+  lastOffline?: string;
+}
+
+export interface SyncProgress {
+  total: number;
+  completed: number;
+  failed: number;
+  currentFile?: string;
+  isSyncing: boolean;
+}

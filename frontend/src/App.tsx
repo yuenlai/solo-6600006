@@ -12,8 +12,10 @@ import { ShareAccessPage } from './components/ShareAccessPage';
 import { LargeFileTransferPanel } from './components/LargeFileTransferPanel';
 import { ConflictResolutionCenter } from './components/ConflictResolutionCenter';
 import { StorageAnalysisPanel } from './components/StorageAnalysisPanel';
+import { OfflineSyncPanel } from './components/OfflineSyncPanel';
 import { useSyncStore } from './store/sync';
-import { SyncFile, Device, SyncActivity, FileVersion, RecycleBinItem, SyncSchedule, LargeFileTransferItem } from './types';
+import { useNetworkStatus } from './hooks/useNetworkStatus';
+import { SyncFile, Device, SyncActivity, FileVersion, RecycleBinItem, SyncSchedule, LargeFileTransferItem, OfflineChangeAction } from './types';
 
 const now = new Date();
 
@@ -228,6 +230,8 @@ const App: React.FC = () => {
   const [tab, setTab] = useState<'activity' | 'files' | 'devices' | 'conflicts' | 'recyclebin' | 'schedule' | 'largetransfers' | 'storage'>('activity');
   const [shareToken, setShareToken] = useState<string | null>(getShareTokenFromPath());
   
+  const networkStatus = useNetworkStatus();
+  
   const conflicts = useSyncStore(state => state.conflicts);
   const resolveConflict = useSyncStore(state => state.resolveConflict);
   const batchResolveConflicts = useSyncStore(state => state.batchResolveConflicts);
@@ -243,6 +247,10 @@ const App: React.FC = () => {
   const shareLinksPanelFileId = useSyncStore(state => state.shareLinksPanelFileId);
   const largeFileTransfers = useSyncStore(state => state.largeFileTransfers);
   const storageAnalysis = useSyncStore(state => state.storageAnalysis);
+  const offlineChanges = useSyncStore(state => state.offlineChanges);
+  const offlineSyncProgress = useSyncStore(state => state.offlineSyncProgress);
+  const isOfflinePanelOpen = useSyncStore(state => state.isOfflinePanelOpen);
+  const isOnlineStore = useSyncStore(state => state.isOnline);
   
   const setFiles = useSyncStore(state => state.setFiles);
   const setActivities = useSyncStore(state => state.setActivities);
@@ -269,6 +277,15 @@ const App: React.FC = () => {
   const resumeLargeFileTransfer = useSyncStore(state => state.resumeLargeFileTransfer);
   const retryLargeFileTransfer = useSyncStore(state => state.retryLargeFileTransfer);
   const cancelLargeFileTransfer = useSyncStore(state => state.cancelLargeFileTransfer);
+  const setIsOnline = useSyncStore(state => state.setIsOnline);
+  const addOfflineChange = useSyncStore(state => state.addOfflineChange);
+  const removeOfflineChange = useSyncStore(state => state.removeOfflineChange);
+  const loadOfflineChanges = useSyncStore(state => state.loadOfflineChanges);
+  const startOfflineSync = useSyncStore(state => state.startOfflineSync);
+  const retryOfflineChange = useSyncStore(state => state.retryOfflineChange);
+  const retryAllFailedOfflineChanges = useSyncStore(state => state.retryAllFailedOfflineChanges);
+  const clearSyncedOfflineChanges = useSyncStore(state => state.clearSyncedOfflineChanges);
+  const toggleOfflinePanel = useSyncStore(state => state.toggleOfflinePanel);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -286,7 +303,23 @@ const App: React.FC = () => {
     if (state.devices.length === 0) setDevices(mockDevices);
     if (state.schedules.length === 0) setSchedules(mockSchedules);
     if (state.largeFileTransfers.length === 0) setLargeFileTransfers(mockLargeFileTransfers);
-  }, [setFiles, setActivities, setRecycleBin, setDevices, setSchedules, setLargeFileTransfers]);
+    loadOfflineChanges();
+  }, [setFiles, setActivities, setRecycleBin, setDevices, setSchedules, setLargeFileTransfers, loadOfflineChanges]);
+
+  useEffect(() => {
+    setIsOnline(networkStatus.isOnline);
+  }, [networkStatus.isOnline, setIsOnline]);
+
+  useEffect(() => {
+    if (networkStatus.isOnline) {
+      const pendingCount = offlineChanges.filter(c => c.status === 'pending' || c.status === 'failed').length;
+      if (pendingCount > 0 && !offlineSyncProgress.isSyncing) {
+        setTimeout(() => {
+          startOfflineSync();
+        }, 1000);
+      }
+    }
+  }, [networkStatus.isOnline]);
 
   const displayFiles = files.length > 0 ? files : mockFiles;
   const displayActivities = activities.length > 0 ? activities : mockActivities;
@@ -335,6 +368,41 @@ const App: React.FC = () => {
   const handleBackToHome = () => {
     window.history.pushState({}, '', '/');
     setShareToken(null);
+  };
+
+  const pendingOfflineCount = offlineChanges.filter(
+    c => c.status === 'pending' || c.status === 'failed'
+  ).length;
+
+  const simulateFileEdit = (action: OfflineChangeAction, file?: SyncFile) => {
+    const targetFile = file || displayFiles[Math.floor(Math.random() * displayFiles.length)];
+    if (!targetFile) return;
+
+    addOfflineChange({
+      fileId: targetFile.id,
+      fileName: targetFile.name,
+      filePath: targetFile.path,
+      action,
+      size: targetFile.size,
+    });
+  };
+
+  const simulateBatchEdits = () => {
+    const actions: OfflineChangeAction[] = ['modify', 'upload', 'delete', 'modify', 'modify'];
+    actions.forEach((action, index) => {
+      setTimeout(() => {
+        const file = displayFiles[index % displayFiles.length];
+        if (file) {
+          addOfflineChange({
+            fileId: file.id + `-${index}`,
+            fileName: index % 2 === 0 ? file.name : `new_file_${index}.txt`,
+            filePath: file.path,
+            action,
+            size: file.size + index * 1024,
+          });
+        }
+      }, index * 300);
+    });
   };
 
   if (shareToken) {
@@ -432,7 +500,7 @@ const App: React.FC = () => {
 
   return (
     <div style={{ display: 'flex', height: '100vh', fontFamily: 'sans-serif' }}>
-      <nav style={{ width: '200px', background: '#263238', color: '#fff', padding: '20px 0' }}>
+      <nav style={{ width: '200px', background: '#263238', color: '#fff', padding: '20px 0', display: 'flex', flexDirection: 'column' }}>
         <h2 style={{ margin: '0 0 20px', padding: '0 16px', fontSize: '16px' }}>FileSync</h2>
         {[
           { key: 'activity', label: '同步动态' },
@@ -457,11 +525,129 @@ const App: React.FC = () => {
             cursor: 'pointer', background: tab === t.key ? 'rgba(255,255,255,0.1)' : 'transparent', color: '#fff', fontSize: '14px'
           }}>{t.label}</button>
         ))}
+        <div style={{ marginTop: 'auto', padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+          <button
+            onClick={toggleOfflinePanel}
+            style={{
+              width: '100%',
+              padding: '10px 12px',
+              borderRadius: '6px',
+              border: 'none',
+              background: isOnlineStore ? '#1976d2' : '#f44336',
+              color: '#fff',
+              cursor: 'pointer',
+              fontSize: '13px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{
+                width: '8px',
+                height: '8px',
+                borderRadius: '50%',
+                background: isOnlineStore ? '#4caf50' : '#ffcdd2',
+                boxShadow: isOnlineStore ? '0 0 8px #4caf50' : 'none',
+              }} />
+              {isOnlineStore ? '在线' : '离线'}
+            </span>
+            {pendingOfflineCount > 0 && (
+              <span style={{
+                background: 'rgba(255,255,255,0.2)',
+                padding: '2px 8px',
+                borderRadius: '10px',
+                fontSize: '12px',
+              }}>
+                {pendingOfflineCount}
+              </span>
+            )}
+          </button>
+          <div style={{ marginTop: '12px' }}>
+            <p style={{ margin: '0 0 8px', fontSize: '12px', color: '#90a4ae' }}>模拟离线编辑:</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <button
+                onClick={() => simulateFileEdit('modify')}
+                style={{
+                  padding: '6px 10px',
+                  borderRadius: '4px',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  background: 'transparent',
+                  color: '#fff',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  textAlign: 'left',
+                }}
+              >
+                📝 修改文件
+              </button>
+              <button
+                onClick={() => simulateFileEdit('upload')}
+                style={{
+                  padding: '6px 10px',
+                  borderRadius: '4px',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  background: 'transparent',
+                  color: '#fff',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  textAlign: 'left',
+                }}
+              >
+                ⬆️ 上传新文件
+              </button>
+              <button
+                onClick={() => simulateFileEdit('delete')}
+                style={{
+                  padding: '6px 10px',
+                  borderRadius: '4px',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  background: 'transparent',
+                  color: '#fff',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  textAlign: 'left',
+                }}
+              >
+                🗑️ 删除文件
+              </button>
+              <button
+                onClick={simulateBatchEdits}
+                style={{
+                  padding: '6px 10px',
+                  borderRadius: '4px',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  background: 'rgba(255,255,255,0.1)',
+                  color: '#fff',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  textAlign: 'left',
+                  fontWeight: 500,
+                }}
+              >
+                📦 批量操作 (5个)
+              </button>
+            </div>
+          </div>
+        </div>
       </nav>
       <main style={{ flex: 1, overflow: 'auto', background: '#fafafa' }}>
         {renderContent()}
       </main>
       <DeviceOnboardingWizard />
+      {isOfflinePanelOpen && (
+        <OfflineSyncPanel
+          changes={offlineChanges}
+          progress={offlineSyncProgress}
+          isOnline={isOnlineStore}
+          onStartSync={startOfflineSync}
+          onRetry={retryOfflineChange}
+          onRetryAll={retryAllFailedOfflineChanges}
+          onClearSynced={clearSyncedOfflineChanges}
+          onRemove={removeOfflineChange}
+          onClose={toggleOfflinePanel}
+        />
+      )}
     </div>
   );
 };
