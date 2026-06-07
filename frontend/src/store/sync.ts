@@ -372,31 +372,27 @@ export const useSyncStore = create<SyncState>((set, get) => ({
   })),
   pauseLargeFileTransfer: (id) => set((state) => ({
     largeFileTransfers: state.largeFileTransfers.map(t =>
-      t.id === id ? { ...t, status: 'paused' } : t
+      t.id === id ? { ...t, status: 'paused', speed: 0 } : t
     ),
   })),
   resumeLargeFileTransfer: (id) => set((state) => ({
     largeFileTransfers: state.largeFileTransfers.map(t =>
-      t.id === id ? { ...t, status: 'uploading' } : t
+      t.id === id ? { ...t, status: 'uploading', speed: 1048576 } : t
     ),
   })),
-  retryLargeFileTransfer: (id) => set((state) => {
-    const transfer = state.largeFileTransfers.find(t => t.id === id);
-    if (!transfer) return state;
-    const newRetryCount = transfer.retryCount + 1;
-    return {
-      largeFileTransfers: state.largeFileTransfers.map(t =>
-        t.id === id ? {
-          ...t,
-          status: 'uploading',
-          uploaded: 0,
-          errorMessage: undefined,
-          retryCount: newRetryCount,
-          startTime: new Date().toISOString(),
-        } : t
-      ),
-    };
-  }),
+  retryLargeFileTransfer: (id) => set((state) => ({
+    largeFileTransfers: state.largeFileTransfers.map(t =>
+      t.id === id ? {
+        ...t,
+        status: 'uploading',
+        uploaded: 0,
+        errorMessage: undefined,
+        retryCount: t.retryCount + 1,
+        startTime: new Date().toISOString(),
+        speed: 1048576,
+      } : t
+    ),
+  })),
   cancelLargeFileTransfer: (id) => set((state) => ({
     largeFileTransfers: state.largeFileTransfers.filter(t => t.id !== id),
   })),

@@ -272,13 +272,14 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (files.length === 0) setFiles(mockFiles);
-    if (activities.length === 0) setActivities(mockActivities);
-    if (recycleBin.length === 0) setRecycleBin(mockRecycleBin);
-    if (devices.length === 0) setDevices(mockDevices);
-    if (schedules.length === 0) setSchedules(mockSchedules);
-    if (largeFileTransfers.length === 0) setLargeFileTransfers(mockLargeFileTransfers);
-  }, [files.length, activities.length, recycleBin.length, devices.length, schedules.length, largeFileTransfers.length, setFiles, setActivities, setRecycleBin, setDevices, setSchedules, setLargeFileTransfers]);
+    const state = useSyncStore.getState();
+    if (state.files.length === 0) setFiles(mockFiles);
+    if (state.activities.length === 0) setActivities(mockActivities);
+    if (state.recycleBin.length === 0) setRecycleBin(mockRecycleBin);
+    if (state.devices.length === 0) setDevices(mockDevices);
+    if (state.schedules.length === 0) setSchedules(mockSchedules);
+    if (state.largeFileTransfers.length === 0) setLargeFileTransfers(mockLargeFileTransfers);
+  }, [setFiles, setActivities, setRecycleBin, setDevices, setSchedules, setLargeFileTransfers]);
 
   const displayFiles = files.length > 0 ? files : mockFiles;
   const displayActivities = activities.length > 0 ? activities : mockActivities;
@@ -290,25 +291,25 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      const state = useSyncStore.getState();
-      const updatedTransfers = state.largeFileTransfers.map(transfer => {
-        if (transfer.status === 'uploading' && transfer.uploaded < transfer.size) {
-          const increment = Math.floor(transfer.size * 0.02);
-          const newUploaded = Math.min(transfer.uploaded + increment, transfer.size);
-          const newStatus = newUploaded >= transfer.size ? 'completed' : 'uploading';
-          return {
-            ...transfer,
-            uploaded: newUploaded,
-            status: newStatus as any,
-            speed: newStatus === 'completed' ? 0 : transfer.speed + Math.floor(Math.random() * 50000),
-          };
-        }
-        return transfer;
+      useSyncStore.setState((state) => {
+        let hasChanges = false;
+        const updatedTransfers = state.largeFileTransfers.map(transfer => {
+          if (transfer.status === 'uploading' && transfer.uploaded < transfer.size) {
+            hasChanges = true;
+            const increment = Math.floor(transfer.size * 0.02);
+            const newUploaded = Math.min(transfer.uploaded + increment, transfer.size);
+            const isCompleted = newUploaded >= transfer.size;
+            return {
+              ...transfer,
+              uploaded: newUploaded,
+              status: isCompleted ? 'completed' as const : 'uploading' as const,
+              speed: isCompleted ? 0 : Math.max(524288, transfer.speed + Math.floor(Math.random() * 500000 - 250000)),
+            };
+          }
+          return transfer;
+        });
+        return hasChanges ? { largeFileTransfers: updatedTransfers } : {};
       });
-      const hasChanges = updatedTransfers.some((t, i) => t.uploaded !== state.largeFileTransfers[i].uploaded);
-      if (hasChanges) {
-        state.setLargeFileTransfers(updatedTransfers);
-      }
     }, 1000);
     return () => clearInterval(interval);
   }, []);
