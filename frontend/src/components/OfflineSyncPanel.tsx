@@ -74,8 +74,6 @@ export const OfflineSyncPanel: React.FC<Props> = ({
     return `${(size / 1024 / 1024 / 1024).toFixed(1)} GB`;
   };
 
-  const progressPercent = progress.total > 0 ? Math.round((progress.completed + progress.failed) / progress.total * 100) : 0;
-
   return (
     <div style={{
       position: 'fixed',
@@ -129,30 +127,78 @@ export const OfflineSyncPanel: React.FC<Props> = ({
         </button>
       </div>
 
+      <div style={{
+        padding: '16px 20px',
+        background: '#fafafa',
+        borderBottom: '1px solid #e0e0e0',
+      }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
+          {[
+            { label: '待同步', count: pendingCount, color: '#1565c0', bg: '#e3f2fd' },
+            { label: '同步中', count: changes.filter(c => c.status === 'syncing').length, color: '#0277bd', bg: '#e1f5fe' },
+            { label: '已成功', count: successCount, color: '#2e7d32', bg: '#e8f5e9' },
+            { label: '失败', count: failedCount, color: '#c62828', bg: '#ffebee' },
+          ].map(item => (
+            <div
+              key={item.label}
+              style={{
+                padding: '12px 8px',
+                borderRadius: '8px',
+                background: item.bg,
+                textAlign: 'center',
+              }}
+            >
+              <div style={{
+                fontSize: '24px',
+                fontWeight: 'bold',
+                color: item.color,
+                lineHeight: 1.2,
+              }}>
+                {item.count}
+              </div>
+              <div style={{ fontSize: '12px', color: item.color, marginTop: '4px' }}>
+                {item.label}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {progress.isSyncing && (
         <div style={{ padding: '16px 20px', background: '#e3f2fd', borderBottom: '1px solid #bbdefb' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
             <span style={{ fontSize: '13px', fontWeight: 500, color: '#1565c0' }}>
-              正在同步: {progress.currentFile}
+              🔄 正在同步: {progress.currentFile}
             </span>
-            <span style={{ fontSize: '13px', color: '#1565c0' }}>
-              {progress.completed + progress.failed}/{progress.total}
+            <span style={{ fontSize: '13px', color: '#1565c0', fontWeight: 500 }}>
+              {progress.completed} 成功 / {progress.failed} 失败 / {progress.total} 总计
             </span>
           </div>
           <div style={{
             width: '100%',
-            height: '6px',
+            height: '8px',
             background: '#bbdefb',
-            borderRadius: '3px',
+            borderRadius: '4px',
             overflow: 'hidden',
+            display: 'flex',
           }}>
             <div style={{
               height: '100%',
-              width: `${progressPercent}%`,
-              background: '#1976d2',
-              borderRadius: '3px',
+              width: `${progress.total > 0 ? (progress.completed / progress.total * 100) : 0}%`,
+              background: '#4caf50',
               transition: 'width 0.3s ease',
             }} />
+            <div style={{
+              height: '100%',
+              width: `${progress.total > 0 ? (progress.failed / progress.total * 100) : 0}%`,
+              background: '#f44336',
+              transition: 'width 0.3s ease',
+            }} />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '6px', fontSize: '11px', color: '#666' }}>
+            <span>✅ 成功 {progress.completed}</span>
+            <span>❌ 失败 {progress.failed}</span>
+            <span>⏳ 剩余 {progress.total - progress.completed - progress.failed}</span>
           </div>
         </div>
       )}
@@ -173,7 +219,7 @@ export const OfflineSyncPanel: React.FC<Props> = ({
               fontWeight: 500,
             }}
           >
-            {progress.isSyncing ? '同步中...' : `开始同步 (${pendingCount})`}
+            {progress.isSyncing ? '🔄 同步中...' : pendingCount > 0 ? `▶️ 开始同步 (${pendingCount})` : '✅ 暂无待同步'}
           </button>
           {failedCount > 0 && (
             <button
@@ -189,7 +235,7 @@ export const OfflineSyncPanel: React.FC<Props> = ({
                 fontSize: '13px',
               }}
             >
-              重试失败 ({failedCount})
+              🔄 重试失败 ({failedCount})
             </button>
           )}
           {successCount > 0 && (
@@ -205,7 +251,7 @@ export const OfflineSyncPanel: React.FC<Props> = ({
                 fontSize: '13px',
               }}
             >
-              清除已同步 ({successCount})
+              🗑️ 清除已同步 ({successCount})
             </button>
           )}
         </div>
@@ -214,9 +260,9 @@ export const OfflineSyncPanel: React.FC<Props> = ({
       <div style={{ padding: '12px 20px', display: 'flex', gap: '8px' }}>
         {[
           { key: 'all', label: '全部', count: changes.length },
-          { key: 'pending', label: '等待中', count: changes.filter(c => c.status === 'pending').length },
-          { key: 'success', label: '已成功', count: successCount },
-          { key: 'failed', label: '失败', count: failedCount },
+          { key: 'pending', label: '⏳ 等待中', count: changes.filter(c => c.status === 'pending').length },
+          { key: 'success', label: '✅ 已成功', count: successCount },
+          { key: 'failed', label: '❌ 失败', count: failedCount },
         ].map(item => (
           <button
             key={item.key}

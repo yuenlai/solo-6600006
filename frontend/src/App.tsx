@@ -564,65 +564,79 @@ const App: React.FC = () => {
             )}
           </button>
           <div style={{ marginTop: '12px' }}>
-            <p style={{ margin: '0 0 8px', fontSize: '12px', color: '#90a4ae' }}>模拟离线编辑:</p>
+            <p style={{ margin: '0 0 8px', fontSize: '12px', color: '#90a4ae' }}>
+              {isOnlineStore ? '💡 请先断开网络模拟离线' : '📡 模拟离线编辑:'}
+            </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               <button
                 onClick={() => simulateFileEdit('modify')}
+                disabled={isOnlineStore}
+                title={isOnlineStore ? '请先断开网络后再试' : ''}
                 style={{
                   padding: '6px 10px',
                   borderRadius: '4px',
                   border: '1px solid rgba(255,255,255,0.2)',
-                  background: 'transparent',
-                  color: '#fff',
-                  cursor: 'pointer',
+                  background: isOnlineStore ? 'rgba(255,255,255,0.05)' : 'transparent',
+                  color: isOnlineStore ? '#546e7a' : '#fff',
+                  cursor: isOnlineStore ? 'not-allowed' : 'pointer',
                   fontSize: '12px',
                   textAlign: 'left',
+                  opacity: isOnlineStore ? 0.6 : 1,
                 }}
               >
                 📝 修改文件
               </button>
               <button
                 onClick={() => simulateFileEdit('upload')}
+                disabled={isOnlineStore}
+                title={isOnlineStore ? '请先断开网络后再试' : ''}
                 style={{
                   padding: '6px 10px',
                   borderRadius: '4px',
                   border: '1px solid rgba(255,255,255,0.2)',
-                  background: 'transparent',
-                  color: '#fff',
-                  cursor: 'pointer',
+                  background: isOnlineStore ? 'rgba(255,255,255,0.05)' : 'transparent',
+                  color: isOnlineStore ? '#546e7a' : '#fff',
+                  cursor: isOnlineStore ? 'not-allowed' : 'pointer',
                   fontSize: '12px',
                   textAlign: 'left',
+                  opacity: isOnlineStore ? 0.6 : 1,
                 }}
               >
                 ⬆️ 上传新文件
               </button>
               <button
                 onClick={() => simulateFileEdit('delete')}
+                disabled={isOnlineStore}
+                title={isOnlineStore ? '请先断开网络后再试' : ''}
                 style={{
                   padding: '6px 10px',
                   borderRadius: '4px',
                   border: '1px solid rgba(255,255,255,0.2)',
-                  background: 'transparent',
-                  color: '#fff',
-                  cursor: 'pointer',
+                  background: isOnlineStore ? 'rgba(255,255,255,0.05)' : 'transparent',
+                  color: isOnlineStore ? '#546e7a' : '#fff',
+                  cursor: isOnlineStore ? 'not-allowed' : 'pointer',
                   fontSize: '12px',
                   textAlign: 'left',
+                  opacity: isOnlineStore ? 0.6 : 1,
                 }}
               >
                 🗑️ 删除文件
               </button>
               <button
                 onClick={simulateBatchEdits}
+                disabled={isOnlineStore}
+                title={isOnlineStore ? '请先断开网络后再试' : ''}
                 style={{
                   padding: '6px 10px',
                   borderRadius: '4px',
                   border: '1px solid rgba(255,255,255,0.2)',
-                  background: 'rgba(255,255,255,0.1)',
-                  color: '#fff',
-                  cursor: 'pointer',
+                  background: isOnlineStore ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.1)',
+                  color: isOnlineStore ? '#546e7a' : '#fff',
+                  cursor: isOnlineStore ? 'not-allowed' : 'pointer',
                   fontSize: '12px',
                   textAlign: 'left',
                   fontWeight: 500,
+                  opacity: isOnlineStore ? 0.6 : 1,
                 }}
               >
                 📦 批量操作 (5个)

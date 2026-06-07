@@ -587,6 +587,11 @@ export const useSyncStore = create<SyncState>((set, get) => ({
   setIsOnline: (online) => set({ isOnline: online }),
 
   addOfflineChange: (change) => {
+    const state = get();
+    if (state.isOnline) {
+      console.warn('设备当前在线，操作将直接同步，不进入离线暂存队列');
+      return;
+    }
     const newChange: OfflineChange = {
       ...change,
       id: `offline-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -595,8 +600,8 @@ export const useSyncStore = create<SyncState>((set, get) => ({
       retryCount: 0,
     };
     offlineStorage.add(newChange);
-    set((state) => ({
-      offlineChanges: [...state.offlineChanges, newChange],
+    set((s) => ({
+      offlineChanges: [...s.offlineChanges, newChange],
     }));
   },
 
@@ -643,6 +648,14 @@ export const useSyncStore = create<SyncState>((set, get) => ({
     let failed = 0;
 
     pendingChanges.forEach((change, index) => {
+      setTimeout(() => {
+        set((s) => ({
+          offlineChanges: s.offlineChanges.map((c) =>
+            c.id === change.id ? { ...c, status: 'syncing' as const } : c
+          ),
+        }));
+      }, 800 + index * 600 - 200);
+
       setTimeout(() => {
         const success = Math.random() > 0.15;
 
@@ -702,7 +715,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
 
     set((s) => ({
       offlineChanges: s.offlineChanges.map((c) =>
-        c.id === id ? { ...c, status: 'pending', errorMessage: undefined } : c
+        c.id === id ? { ...c, status: 'syncing' as const, errorMessage: undefined } : c
       ),
     }));
 
