@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, Steps, Form, Input, Select, Space, Card, Checkbox, Button, Progress, Alert, List, Tag, InputNumber, Typography } from 'antd';
+import { Modal, Steps, Form, Input, Select, Space, Card, Checkbox, Button, Progress, Alert, List, Tag, InputNumber, Typography, message } from 'antd';
 import { PlusOutlined, DeleteOutlined, CheckCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { useSyncStore } from '../store/sync';
 import { WizardStep, SpaceValidationResult } from '../types';
@@ -43,7 +43,8 @@ export const DeviceOnboardingWizard: React.FC = () => {
   } = useSyncStore();
 
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
-  const [form] = Form.useForm();
+  const [nameForm] = Form.useForm();
+  const [spaceForm] = Form.useForm();
   const [spaceValidation, setSpaceValidation] = useState<SpaceValidationResult | null>(null);
   const [customDirectory, setCustomDirectory] = useState('');
   const [loading, setLoading] = useState(false);
@@ -54,33 +55,54 @@ export const DeviceOnboardingWizard: React.FC = () => {
     if (isOnboardingWizardOpen) {
       setCurrentStepIndex(0);
       setSpaceValidation(null);
-      form.resetFields();
-      form.setFieldsValue({
+      setCustomDirectory('');
+      nameForm.resetFields();
+      spaceForm.resetFields();
+      nameForm.setFieldsValue({
         name: onboardingWizardData.name,
         platform: onboardingWizardData.platform,
-        storageTotal: onboardingWizardData.storageTotal / 1024 / 1024 / 1024,
-        storageUsed: onboardingWizardData.storageUsed / 1024 / 1024 / 1024,
+        storageTotal: 100,
+        storageUsed: 0,
+      });
+      spaceForm.setFieldsValue({
+        requiredSpace: 10,
       });
     }
-  }, [isOnboardingWizardOpen, form, onboardingWizardData]);
+  }, [isOnboardingWizardOpen, nameForm, spaceForm, onboardingWizardData]);
 
   const handleNext = async () => {
     try {
-      const values = await form.validateFields();
-      
       if (currentStep === 'name') {
+        const values = await nameForm.validateFields();
+        const storageTotalBytes = values.storageTotal * 1024 * 1024 * 1024;
+        const storageUsedBytes = values.storageUsed * 1024 * 1024 * 1024;
+        
+        if (storageUsedBytes > storageTotalBytes) {
+          message.error('已使用容量不能大于总容量');
+          return;
+        }
+        
         updateOnboardingData({
           name: values.name,
           platform: values.platform,
-          storageTotal: values.storageTotal * 1024 * 1024 * 1024,
-          storageUsed: values.storageUsed * 1024 * 1024 * 1024,
+          storageTotal: storageTotalBytes,
+          storageUsed: storageUsedBytes,
         });
       }
 
       if (currentStep === 'space') {
-        const result = validateSpace(values.requiredSpace * 1024 * 1024 * 1024);
+        const values = await spaceForm.validateFields();
+        const requiredSpaceBytes = values.requiredSpace * 1024 * 1024 * 1024;
+        const result = validateSpace(requiredSpaceBytes);
         setSpaceValidation(result);
         if (!result.valid) {
+          return;
+        }
+      }
+
+      if (currentStep === 'directory') {
+        if (onboardingWizardData.syncDirectories.length === 0) {
+          message.warning('请至少选择一个同步目录');
           return;
         }
       }
@@ -101,6 +123,7 @@ export const DeviceOnboardingWizard: React.FC = () => {
         syncDirectories: [...onboardingWizardData.syncDirectories, customDirectory],
       });
       setCustomDirectory('');
+      message.success('目录已添加');
     }
   };
 
@@ -132,9 +155,19 @@ export const DeviceOnboardingWizard: React.FC = () => {
   };
 
   const handleComplete = async () => {
+    if (onboardingWizardData.syncDirectories.length === 0) {
+      message.warning('请至少选择一个同步目录');
+      return;
+    }
+    if (!onboardingWizardData.name) {
+      message.warning('请输入设备名称');
+      return;
+    }
+    
     setLoading(true);
     try {
-      completeOnboarding();
+      const newDevice = completeOnboarding();
+      message.success(`设备 "${newDevice.name}" 已成功添加！`);
     } finally {
       setLoading(false);
     }
@@ -144,7 +177,7 @@ export const DeviceOnboardingWizard: React.FC = () => {
     switch (currentStep) {
       case 'name':
         return (
-          <Form form={form} layout="vertical">
+          <Form form={nameForm} layout="vertical">
             <Form.Item
               name="name"
               label="设备名称"
@@ -195,7 +228,7 @@ export const DeviceOnboardingWizard: React.FC = () => {
 
       case 'space':
         return (
-          <Form form={form} layout="vertical">
+          <Form form={spaceForm} layout="vertical">
             <Title level={5}>存储空间预估</Title>
             <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
               请输入预计需要占用的存储空间，系统将校验设备是否有足够空间。
@@ -217,10 +250,11 @@ export const DeviceOnboardingWizard: React.FC = () => {
                 message={spaceValidation.valid ? '空间校验通过' : '空间校验失败'}
                 description={spaceValidation.message}
                 showIcon
+                style={{ marginBottom: 16 }}
               />
             )}
             {onboardingWizardData.storageTotal > 0 && (
-              <Card style={{ marginTop: 16 }}>
+              <Card>
                 <Space direction="vertical" size="small" style={{ width: '100%' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <Text strong>总容量</Text>
@@ -277,6 +311,7 @@ export const DeviceOnboardingWizard: React.FC = () => {
                     <List.Item
                       actions={[
                         <Button
+                          key="delete"
                           type="text"
                           danger
                           size="small"
@@ -293,7 +328,7 @@ export const DeviceOnboardingWizard: React.FC = () => {
             </Card>
             <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
               <Input
-                placeholder="输入自定义目录路径"
+                placeholder="输入自定义目录路径，例如：/work/projects"
                 value={customDirectory}
                 onChange={e => setCustomDirectory(e.target.value)}
                 onPressEnter={handleAddDirectory}
@@ -312,7 +347,7 @@ export const DeviceOnboardingWizard: React.FC = () => {
             <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
               配置该设备的同步权限，确保数据安全。
             </Text>
-            <Card size="small">
+            <Card size="small" style={{ marginBottom: 16 }}>
               <Space direction="vertical" style={{ width: '100%' }}>
                 <Checkbox
                   checked={onboardingWizardData.permissions.readFiles}
@@ -352,7 +387,7 @@ export const DeviceOnboardingWizard: React.FC = () => {
                 </Checkbox>
               </Space>
             </Card>
-            <Card title="配置摘要" size="small" style={{ marginTop: 16 }}>
+            <Card title="配置摘要" size="small">
               <Space direction="vertical" size="small" style={{ width: '100%' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <Text type="secondary">设备名称</Text>
@@ -367,6 +402,15 @@ export const DeviceOnboardingWizard: React.FC = () => {
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <Text type="secondary">同步目录数</Text>
                   <Text strong>{onboardingWizardData.syncDirectories.length} 个</Text>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Text type="secondary">权限配置</Text>
+                  <Space size={4}>
+                    {onboardingWizardData.permissions.readFiles && <Tag color="green">读取</Tag>}
+                    {onboardingWizardData.permissions.writeFiles && <Tag color="blue">写入</Tag>}
+                    {onboardingWizardData.permissions.deleteFiles && <Tag color="orange">删除</Tag>}
+                    {onboardingWizardData.permissions.autoSync && <Tag color="purple">自动同步</Tag>}
+                  </Space>
                 </div>
               </Space>
             </Card>
@@ -386,13 +430,14 @@ export const DeviceOnboardingWizard: React.FC = () => {
       width={640}
       footer={null}
       destroyOnClose
+      maskClosable={false}
     >
       <Steps current={currentStepIndex} size="small" style={{ marginBottom: 32 }}>
         {stepOrder.map(step => (
           <Step key={step} title={stepTitles[step]} />
         ))}
       </Steps>
-      <div style={{ minHeight: 320, marginBottom: 24 }}>
+      <div style={{ minHeight: 360, marginBottom: 24 }}>
         {renderStepContent()}
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between' }}>

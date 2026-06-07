@@ -125,11 +125,11 @@ const App: React.FC = () => {
   } = useSyncStore();
 
   useEffect(() => {
-    setFiles(mockFiles);
-    setActivities(mockActivities);
-    setRecycleBin(mockRecycleBin);
-    setDevices(mockDevices);
-  }, [setFiles, setActivities, setRecycleBin, setDevices]);
+    if (files.length === 0) setFiles(mockFiles);
+    if (activities.length === 0) setActivities(mockActivities);
+    if (recycleBin.length === 0) setRecycleBin(mockRecycleBin);
+    if (devices.length === 0) setDevices(mockDevices);
+  }, [files.length, activities.length, recycleBin.length, devices.length, setFiles, setActivities, setRecycleBin, setDevices]);
 
   const displayFiles = files.length > 0 ? files : mockFiles;
   const displayActivities = activities.length > 0 ? activities : mockActivities;
