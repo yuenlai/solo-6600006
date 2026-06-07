@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { ShareLinkAccessResult } from '../types';
+import { ShareLinkAccessResult, ShareLink } from '../types';
 import { useSyncStore } from '../store/sync';
 
 interface Props {
@@ -43,33 +43,75 @@ export const ShareAccessPage: React.FC<Props> = ({ token, onBack }) => {
   const [loading, setLoading] = useState(true);
   const [result, setResult] = useState<ShareLinkAccessResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const { updateShareLink } = useSyncStore();
+  const [apiAvailable, setApiAvailable] = useState(true);
+  const { shareLinks, updateShareLink } = useSyncStore();
 
   useEffect(() => {
     const accessShareLink = async () => {
       setLoading(true);
       setError(null);
       try {
-        const response = await axios.get(`${API_BASE}/share-links/access/${token}`);
+        const response = await axios.get(`${API_BASE}/share-links/access/${token}`, { timeout: 3000 });
         const data: ShareLinkAccessResult = response.data;
         setResult(data);
+        setApiAvailable(true);
         
         if (data.valid && data.shareLink) {
-          updateShareLink(data.shareLink.id, {
-            accessCount: data.shareLink.accessCount,
-            isActive: data.shareLink.isActive,
+          const updatedLink: ShareLink = data.shareLink;
+          updateShareLink(updatedLink.id, {
+            accessCount: updatedLink.accessCount,
+            isActive: updatedLink.isActive,
           });
         }
       } catch (err) {
-        console.error('Failed to access share link:', err);
-        setError('无法连接到服务器，请稍后重试');
+        console.warn('Backend API not available, trying local fallback:', err);
+        setApiAvailable(false);
+        
+        const localLink = shareLinks.find(l => l.token === token);
+        if (localLink) {
+          const now = new Date();
+          const expiresAt = new Date(localLink.expiresAt);
+          const expired = now > expiresAt;
+          const maxReached = localLink.maxAccessCount ? localLink.accessCount >= localLink.maxAccessCount : false;
+          
+          if (!localLink.isActive || expired || maxReached) {
+            let message = '分享链接已失效';
+            if (!localLink.isActive) message = '分享链接已被禁用';
+            else if (expired) message = '分享链接已过期';
+            else if (maxReached) message = '分享链接已达到最大访问次数';
+            
+            setResult({
+              valid: false,
+              message,
+              shareLink: undefined,
+            });
+          } else {
+            const newAccessCount = localLink.accessCount + 1;
+            const newIsActive = localLink.maxAccessCount ? newAccessCount < localLink.maxAccessCount : true;
+            
+            updateShareLink(localLink.id, {
+              accessCount: newAccessCount,
+              isActive: newIsActive,
+            });
+            
+            const updatedLink = { ...localLink, accessCount: newAccessCount, isActive: newIsActive };
+            
+            setResult({
+              valid: true,
+              message: '访问成功',
+              shareLink: updatedLink,
+            });
+          }
+        } else {
+          setError('该分享链接不存在');
+        }
       } finally {
         setLoading(false);
       }
     };
 
     accessShareLink();
-  }, [token, updateShareLink]);
+  }, [token, shareLinks, updateShareLink]);
 
   if (loading) {
     return (
@@ -162,6 +204,9 @@ export const ShareAccessPage: React.FC<Props> = ({ token, onBack }) => {
   }
 
   const link = result.shareLink!;
+  const isLinkValid = link.isActive && 
+    new Date(link.expiresAt) > new Date() && 
+    (!link.maxAccessCount || link.accessCount < link.maxAccessCount);
 
   return (
     <div style={{
@@ -245,74 +290,106 @@ export const ShareAccessPage: React.FC<Props> = ({ token, onBack }) => {
 
         <div style={{ display: 'flex', gap: '12px' }}>
           <button
-            onClick={() => alert('下载功能演示 - 实际项目中会下载对应版本的文件')}
+            onClick={() => alert('下载功能演示 - 实际项目中会下载对应版本 v' + (link.versionNumber || 'latest') + ' 的文件')}
+            disabled={!isLinkValid}
             style={{
               flex: 1,
               padding: '16px',
               border: 'none',
               borderRadius: '10px',
-              background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
+              background: isLinkValid 
+                ? 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)' 
+                : '#bdbdbd',
               color: '#fff',
-              cursor: 'pointer',
+              cursor: isLinkValid ? 'pointer' : 'not-allowed',
               fontSize: '16px',
               fontWeight: 600,
               transition: 'transform 0.2s, box-shadow 0.2s',
-              boxShadow: '0 4px 12px rgba(25,118,210,0.3)',
+              boxShadow: isLinkValid ? '0 4px 12px rgba(25,118,210,0.3)' : 'none',
             }}
             onMouseEnter={(e) => { 
-              e.currentTarget.style.transform = 'translateY(-2px)';
-              e.currentTarget.style.boxShadow = '0 6px 20px rgba(25,118,210,0.4)';
+              if (isLinkValid) {
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = '0 6px 20px rgba(25,118,210,0.4)';
+              }
             }}
             onMouseLeave={(e) => { 
-              e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = '0 4px 12px rgba(25,118,210,0.3)';
+              if (isLinkValid) {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(25,118,210,0.3)';
+              }
             }}
           >
             ⬇️ 下载文件
           </button>
           <button
             onClick={() => alert('预览功能演示 - 实际项目中会打开文件预览')}
+            disabled={!isLinkValid}
             style={{
               padding: '16px 24px',
               border: '2px solid #e0e0e0',
               borderRadius: '10px',
               background: '#fff',
-              color: '#555',
-              cursor: 'pointer',
+              color: isLinkValid ? '#555' : '#999',
+              cursor: isLinkValid ? 'pointer' : 'not-allowed',
               fontSize: '16px',
               fontWeight: 500,
               transition: 'all 0.2s',
             }}
             onMouseEnter={(e) => { 
-              e.currentTarget.style.borderColor = '#1976d2';
-              e.currentTarget.style.color = '#1976d2';
+              if (isLinkValid) {
+                e.currentTarget.style.borderColor = '#1976d2';
+                e.currentTarget.style.color = '#1976d2';
+              }
             }}
             onMouseLeave={(e) => { 
-              e.currentTarget.style.borderColor = '#e0e0e0';
-              e.currentTarget.style.color = '#555';
+              if (isLinkValid) {
+                e.currentTarget.style.borderColor = '#e0e0e0';
+                e.currentTarget.style.color = '#555';
+              }
             }}
           >
             👁️ 预览
           </button>
         </div>
 
-        <div style={{
-          marginTop: '24px',
-          padding: '14px 16px',
-          background: '#e8f5e9',
-          borderRadius: '10px',
-          textAlign: 'center',
-          fontSize: '14px',
-          color: '#2e7d32',
-          fontWeight: 500,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '8px',
-        }}>
-          <span>✓</span>
-          <span>链接有效，您可以安全下载 · {formatExpiryTime(link.expiresAt)}</span>
-        </div>
+        {isLinkValid ? (
+          <div style={{
+            marginTop: '24px',
+            padding: '14px 16px',
+            background: '#e8f5e9',
+            borderRadius: '10px',
+            textAlign: 'center',
+            fontSize: '14px',
+            color: '#2e7d32',
+            fontWeight: 500,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+          }}>
+            <span>✓</span>
+            <span>链接有效，您可以安全下载 · {formatExpiryTime(link.expiresAt)}</span>
+          </div>
+        ) : (
+          <div style={{
+            marginTop: '24px',
+            padding: '14px 16px',
+            background: '#ffebee',
+            borderRadius: '10px',
+            textAlign: 'center',
+            fontSize: '14px',
+            color: '#c62828',
+            fontWeight: 500,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+          }}>
+            <span>⚠️</span>
+            <span>链接已失效，无法下载</span>
+          </div>
+        )}
 
         <button
           onClick={onBack}
@@ -329,6 +406,17 @@ export const ShareAccessPage: React.FC<Props> = ({ token, onBack }) => {
         >
           ← 返回首页
         </button>
+
+        {!apiAvailable && (
+          <div style={{
+            marginTop: '12px',
+            textAlign: 'center',
+            fontSize: '11px',
+            color: '#999',
+          }}>
+            💡 当前为本地演示模式
+          </div>
+        )}
       </div>
     </div>
   );
