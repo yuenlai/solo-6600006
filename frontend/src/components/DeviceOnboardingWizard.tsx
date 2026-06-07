@@ -32,6 +32,14 @@ const platformOptions = [
   { value: 'linux', label: 'Linux', icon: '🐧' },
 ];
 
+const defaultFormValues = {
+  name: '',
+  platform: 'windows',
+  storageTotal: 100,
+  storageUsed: 0,
+  requiredSpace: 10,
+};
+
 export const DeviceOnboardingWizard: React.FC = () => {
   const {
     isOnboardingWizardOpen,
@@ -43,8 +51,7 @@ export const DeviceOnboardingWizard: React.FC = () => {
   } = useSyncStore();
 
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
-  const [nameForm] = Form.useForm();
-  const [spaceForm] = Form.useForm();
+  const [form] = Form.useForm();
   const [spaceValidation, setSpaceValidation] = useState<SpaceValidationResult | null>(null);
   const [customDirectory, setCustomDirectory] = useState('');
   const [loading, setLoading] = useState(false);
@@ -56,24 +63,26 @@ export const DeviceOnboardingWizard: React.FC = () => {
       setCurrentStepIndex(0);
       setSpaceValidation(null);
       setCustomDirectory('');
-      nameForm.resetFields();
-      spaceForm.resetFields();
-      nameForm.setFieldsValue({
-        name: onboardingWizardData.name,
-        platform: onboardingWizardData.platform,
-        storageTotal: 100,
-        storageUsed: 0,
-      });
-      spaceForm.setFieldsValue({
-        requiredSpace: 10,
-      });
+      form.setFieldsValue(defaultFormValues);
     }
-  }, [isOnboardingWizardOpen, nameForm, spaceForm, onboardingWizardData]);
+  }, [isOnboardingWizardOpen, form]);
+
+  const goToNextStep = () => {
+    if (currentStepIndex < stepOrder.length - 1) {
+      setCurrentStepIndex(currentStepIndex + 1);
+    }
+  };
+
+  const goToPrevStep = () => {
+    if (currentStepIndex > 0) {
+      setCurrentStepIndex(currentStepIndex - 1);
+    }
+  };
 
   const handleNext = async () => {
-    try {
-      if (currentStep === 'name') {
-        const values = await nameForm.validateFields();
+    if (currentStep === 'name') {
+      try {
+        const values = await form.validateFields(['name', 'platform', 'storageTotal', 'storageUsed']);
         const storageTotalBytes = values.storageTotal * 1024 * 1024 * 1024;
         const storageUsedBytes = values.storageUsed * 1024 * 1024 * 1024;
         
@@ -88,33 +97,42 @@ export const DeviceOnboardingWizard: React.FC = () => {
           storageTotal: storageTotalBytes,
           storageUsed: storageUsedBytes,
         });
+        
+        goToNextStep();
+      } catch {
+        message.warning('请填写完整的设备信息');
       }
+      return;
+    }
 
-      if (currentStep === 'space') {
-        const values = await spaceForm.validateFields();
+    if (currentStep === 'space') {
+      try {
+        const values = await form.validateFields(['requiredSpace']);
         const requiredSpaceBytes = values.requiredSpace * 1024 * 1024 * 1024;
         const result = validateSpace(requiredSpaceBytes);
         setSpaceValidation(result);
         if (!result.valid) {
           return;
         }
+        goToNextStep();
+      } catch {
+        message.warning('请输入预计需要的存储空间');
       }
-
-      if (currentStep === 'directory') {
-        if (onboardingWizardData.syncDirectories.length === 0) {
-          message.warning('请至少选择一个同步目录');
-          return;
-        }
-      }
-
-      setCurrentStepIndex(prev => Math.min(prev + 1, stepOrder.length - 1));
-    } catch {
-      // Validation failed, stay on current step
+      return;
     }
-  };
 
-  const handlePrev = () => {
-    setCurrentStepIndex(prev => Math.max(prev - 1, 0));
+    if (currentStep === 'directory') {
+      if (onboardingWizardData.syncDirectories.length === 0) {
+        message.warning('请至少选择一个同步目录');
+        return;
+      }
+      goToNextStep();
+      return;
+    }
+
+    if (currentStep === 'permissions') {
+      handleComplete();
+    }
   };
 
   const handleAddDirectory = () => {
@@ -177,7 +195,7 @@ export const DeviceOnboardingWizard: React.FC = () => {
     switch (currentStep) {
       case 'name':
         return (
-          <Form form={nameForm} layout="vertical">
+          <Form form={form} layout="vertical" initialValues={defaultFormValues}>
             <Form.Item
               name="name"
               label="设备名称"
@@ -228,7 +246,7 @@ export const DeviceOnboardingWizard: React.FC = () => {
 
       case 'space':
         return (
-          <Form form={spaceForm} layout="vertical">
+          <Form form={form} layout="vertical">
             <Title level={5}>存储空间预估</Title>
             <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
               请输入预计需要占用的存储空间，系统将校验设备是否有足够空间。
@@ -422,6 +440,8 @@ export const DeviceOnboardingWizard: React.FC = () => {
     }
   };
 
+  const isLastStep = currentStepIndex === stepOrder.length - 1;
+
   return (
     <Modal
       title={<Title level={4} style={{ margin: 0 }}>新设备接入向导</Title>}
@@ -441,23 +461,17 @@ export const DeviceOnboardingWizard: React.FC = () => {
         {renderStepContent()}
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-        <Button onClick={handlePrev} disabled={currentStepIndex === 0}>
+        <Button onClick={goToPrevStep} disabled={currentStepIndex === 0}>
           上一步
         </Button>
-        {currentStepIndex < stepOrder.length - 1 ? (
-          <Button type="primary" onClick={handleNext}>
-            下一步
-          </Button>
-        ) : (
-          <Button
-            type="primary"
-            onClick={handleComplete}
-            loading={loading}
-            disabled={onboardingWizardData.syncDirectories.length === 0}
-          >
-            完成配置
-          </Button>
-        )}
+        <Button
+          type="primary"
+          onClick={handleNext}
+          loading={loading}
+          disabled={isLastStep && onboardingWizardData.syncDirectories.length === 0}
+        >
+          {isLastStep ? '完成配置' : '下一步'}
+        </Button>
       </div>
     </Modal>
   );
