@@ -13,6 +13,7 @@ import { LargeFileTransferPanel } from './components/LargeFileTransferPanel';
 import { ConflictResolutionCenter } from './components/ConflictResolutionCenter';
 import { StorageAnalysisPanel } from './components/StorageAnalysisPanel';
 import { OfflineSyncPanel } from './components/OfflineSyncPanel';
+import { DirectorySnapshotPanel } from './components/DirectorySnapshotPanel';
 import { useSyncStore } from './store/sync';
 import { useNetworkStatus } from './hooks/useNetworkStatus';
 import { SyncFile, Device, SyncActivity, FileVersion, RecycleBinItem, SyncSchedule, LargeFileTransferItem, OfflineChangeAction } from './types';
@@ -227,7 +228,7 @@ const getShareTokenFromPath = (): string | null => {
 };
 
 const App: React.FC = () => {
-  const [tab, setTab] = useState<'activity' | 'files' | 'devices' | 'conflicts' | 'recyclebin' | 'schedule' | 'largetransfers' | 'storage'>('activity');
+  const [tab, setTab] = useState<'activity' | 'files' | 'devices' | 'conflicts' | 'recyclebin' | 'schedule' | 'largetransfers' | 'storage' | 'snapshots'>('activity');
   const [shareToken, setShareToken] = useState<string | null>(getShareTokenFromPath());
   
   const networkStatus = useNetworkStatus();
@@ -247,6 +248,7 @@ const App: React.FC = () => {
   const shareLinksPanelFileId = useSyncStore(state => state.shareLinksPanelFileId);
   const largeFileTransfers = useSyncStore(state => state.largeFileTransfers);
   const storageAnalysis = useSyncStore(state => state.storageAnalysis);
+  const snapshots = useSyncStore(state => state.snapshots);
   const offlineChanges = useSyncStore(state => state.offlineChanges);
   const offlineSyncProgress = useSyncStore(state => state.offlineSyncProgress);
   const isOfflinePanelOpen = useSyncStore(state => state.isOfflinePanelOpen);
@@ -288,6 +290,10 @@ const App: React.FC = () => {
   const retryAllFailedOfflineChanges = useSyncStore(state => state.retryAllFailedOfflineChanges);
   const clearSyncedOfflineChanges = useSyncStore(state => state.clearSyncedOfflineChanges);
   const toggleOfflinePanel = useSyncStore(state => state.toggleOfflinePanel);
+  const createSnapshot = useSyncStore(state => state.createSnapshot);
+  const restoreSnapshot = useSyncStore(state => state.restoreSnapshot);
+  const deleteSnapshot = useSyncStore(state => state.deleteSnapshot);
+  const updateSnapshot = useSyncStore(state => state.updateSnapshot);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -498,6 +504,16 @@ const App: React.FC = () => {
           />
         )}
         {tab === 'storage' && <StorageAnalysisPanel data={storageAnalysis} />}
+        {tab === 'snapshots' && (
+          <DirectorySnapshotPanel
+            snapshots={snapshots}
+            directories={storageAnalysis.byDirectory}
+            onCreateSnapshot={createSnapshot}
+            onRestoreSnapshot={restoreSnapshot}
+            onDeleteSnapshot={deleteSnapshot}
+            onUpdateSnapshot={updateSnapshot}
+          />
+        )}
       </>
     );
   };
@@ -511,6 +527,7 @@ const App: React.FC = () => {
           { key: 'largetransfers', label: '大文件传输' },
           { key: 'schedule', label: '定时同步' },
           { key: 'storage', label: '空间分析' },
+          { key: 'snapshots', label: '目录快照' },
           { key: 'files', label: '文件列表' },
           { key: 'devices', label: '设备管理' },
           { key: 'conflicts', label: '冲突处理' },

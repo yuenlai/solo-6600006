@@ -272,3 +272,32 @@ export interface SyncProgress {
   currentFile?: string;
   isSyncing: boolean;
 }
+
+export interface SnapshotFileItem {
+  path: string;
+  name: string;
+  size: number;
+  modifiedAt: string;
+  hash: string;
+}
+
+export interface DirectorySnapshot {
+  id: string;
+  name: string;
+  description?: string;
+  directoryPath: string;
+  directoryName: string;
+  files: SnapshotFileItem[];
+  totalSize: number;
+  fileCount: number;
+  createdAt: string;
+  createdBy: string;
+  device?: string;
+}
+
+export interface RestoreSnapshotResult {
+  success: boolean;
+  message: string;
+  restoredCount?: number;
+  errors?: string[];
+}

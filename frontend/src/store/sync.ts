@@ -1,8 +1,42 @@
 import { create } from 'zustand';
-import { SyncFile, SyncFolder, Device, SyncConflict, SyncActivity, FileVersion, RecycleBinItem, RestoreResult, DeviceWizardData, SpaceValidationResult, SyncSchedule, ScheduleExecution, ShareLink, LargeFileTransferItem, StorageAnalysisData, OfflineChange, SyncProgress } from '../types';
+import { SyncFile, SyncFolder, Device, SyncConflict, SyncActivity, FileVersion, RecycleBinItem, RestoreResult, DeviceWizardData, SpaceValidationResult, SyncSchedule, ScheduleExecution, ShareLink, LargeFileTransferItem, StorageAnalysisData, OfflineChange, SyncProgress, DirectorySnapshot, RestoreSnapshotResult, SnapshotFileItem } from '../types';
 import { offlineStorage } from '../utils/offlineStorage';
 
 const now = new Date();
+
+const mockSnapshots: DirectorySnapshot[] = [
+  {
+    id: 'snap-1',
+    name: '项目发布前备份',
+    description: 'v2.0 发布前的完整目录快照',
+    directoryPath: '/docs',
+    directoryName: 'docs',
+    files: [
+      { path: '/docs/report.pdf', name: 'report.pdf', size: 245760, modifiedAt: '2026-06-01T10:00:00Z', hash: 'a1b2c3d4' },
+      { path: '/docs/notes.md', name: 'notes.md', size: 4096, modifiedAt: '2026-06-01T11:00:00Z', hash: 'e5f6g7h8' },
+    ],
+    totalSize: 249856,
+    fileCount: 2,
+    createdAt: new Date(now.getTime() - 7 * 86400000).toISOString(),
+    createdBy: '张三',
+    device: 'MacBook Pro',
+  },
+  {
+    id: 'snap-2',
+    name: '设计稿定稿',
+    description: 'UI 设计稿最终版本',
+    directoryPath: '/design',
+    directoryName: 'design',
+    files: [
+      { path: '/design/mockup.psd', name: 'mockup.psd', size: 104857600, modifiedAt: '2026-06-03T14:00:00Z', hash: 'i9j0k1l2' },
+    ],
+    totalSize: 104857600,
+    fileCount: 1,
+    createdAt: new Date(now.getTime() - 3 * 86400000).toISOString(),
+    createdBy: '李四',
+    device: 'Windows Desktop',
+  },
+];
 
 const mockStorageAnalysis: StorageAnalysisData = {
   totalStorageUsed: 53687091200,
@@ -240,6 +274,12 @@ interface SyncState {
   toggleOfflinePanel: () => void;
   toggleManualOfflineMode: () => void;
   setManualOfflineMode: (enabled: boolean) => void;
+  snapshots: DirectorySnapshot[];
+  setSnapshots: (snapshots: DirectorySnapshot[]) => void;
+  createSnapshot: (directoryPath: string, directoryName: string, name: string, description?: string) => DirectorySnapshot;
+  restoreSnapshot: (snapshotId: string) => RestoreSnapshotResult;
+  deleteSnapshot: (snapshotId: string) => void;
+  updateSnapshot: (snapshotId: string, updates: Partial<DirectorySnapshot>) => void;
 }
 
 export const useSyncStore = create<SyncState>((set, get) => ({
@@ -248,6 +288,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
   currentFolder: '/', syncProgress: 0,
   largeFileTransfers: [],
   storageAnalysis: mockStorageAnalysis,
+  snapshots: [...mockSnapshots],
   offlineChanges: [],
   offlineSyncProgress: {
     total: 0,
@@ -785,4 +826,83 @@ export const useSyncStore = create<SyncState>((set, get) => ({
       isOnline: enabled ? false : navigator.onLine,
     });
   },
+
+  setSnapshots: (snapshots) => set({ snapshots }),
+
+  createSnapshot: (directoryPath, directoryName, name, description) => {
+    const state = get();
+    const directoryFiles = state.files.filter(f => f.path.startsWith(directoryPath));
+    const snapshotFiles: SnapshotFileItem[] = directoryFiles.map(f => ({
+      path: f.path,
+      name: f.name,
+      size: f.size,
+      modifiedAt: f.modifiedAt,
+      hash: f.versions.length > 0 ? f.versions[f.versions.length - 1].hash : `hash-${Date.now()}`,
+    }));
+    const totalSize = snapshotFiles.reduce((sum, f) => sum + f.size, 0);
+    const newSnapshot: DirectorySnapshot = {
+      id: `snap-${Date.now()}`,
+      name,
+      description,
+      directoryPath,
+      directoryName,
+      files: snapshotFiles,
+      totalSize,
+      fileCount: snapshotFiles.length,
+      createdAt: new Date().toISOString(),
+      createdBy: '当前用户',
+      device: '当前设备',
+    };
+    set((state) => ({
+      snapshots: [newSnapshot, ...state.snapshots],
+    }));
+    return newSnapshot;
+  },
+
+  restoreSnapshot: (snapshotId) => {
+    const state = get();
+    const snapshot = state.snapshots.find(s => s.id === snapshotId);
+    if (!snapshot) {
+      return { success: false, message: '快照不存在' };
+    }
+    const errors: string[] = [];
+    let restoredCount = 0;
+    snapshot.files.forEach(snapshotFile => {
+      try {
+        const activity: SyncActivity = {
+          id: `act-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          fileId: `restored-${snapshotFile.path}`,
+          fileName: snapshotFile.name,
+          filePath: snapshotFile.path,
+          status: 'success',
+          action: 'modify',
+          timestamp: new Date().toISOString(),
+          device: snapshot.device,
+          size: snapshotFile.size,
+        };
+        get().addActivity(activity);
+        restoredCount++;
+      } catch (e) {
+        errors.push(`恢复文件 ${snapshotFile.name} 失败`);
+      }
+    });
+    return {
+      success: errors.length === 0,
+      message: errors.length === 0
+        ? `成功恢复 ${restoredCount} 个文件到快照状态`
+        : `部分文件恢复失败，成功 ${restoredCount} 个，失败 ${errors.length} 个`,
+      restoredCount,
+      errors,
+    };
+  },
+
+  deleteSnapshot: (snapshotId) => set((state) => ({
+    snapshots: state.snapshots.filter(s => s.id !== snapshotId),
+  })),
+
+  updateSnapshot: (snapshotId, updates) => set((state) => ({
+    snapshots: state.snapshots.map(s =>
+      s.id === snapshotId ? { ...s, ...updates } : s
+    ),
+  })),
 }));
