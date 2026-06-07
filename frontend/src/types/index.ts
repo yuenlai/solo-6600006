@@ -99,3 +99,38 @@ export interface SpaceValidationResult {
   requiredSpace: number;
   message: string;
 }
+
+export type ScheduleType = 'workday' | 'night' | 'custom';
+export type Weekday = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
+
+export interface TimeRange {
+  start: string;
+  end: string;
+}
+
+export interface SyncSchedule {
+  id: string;
+  folderId: string;
+  folderName: string;
+  folderPath: string;
+  scheduleType: ScheduleType;
+  enabled: boolean;
+  weekdays: Weekday[];
+  timeRange: TimeRange;
+  intervalMinutes?: number;
+  lastRun?: string;
+  nextRun?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ScheduleExecution {
+  id: string;
+  scheduleId: string;
+  folderId: string;
+  status: 'success' | 'failed' | 'running' | 'skipped';
+  startTime: string;
+  endTime?: string;
+  filesSynced?: number;
+  errorMessage?: string;
+}

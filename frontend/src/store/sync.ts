@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { SyncFile, SyncFolder, Device, SyncConflict, SyncActivity, FileVersion, RecycleBinItem, RestoreResult, DeviceWizardData, SpaceValidationResult } from '../types';
+import { SyncFile, SyncFolder, Device, SyncConflict, SyncActivity, FileVersion, RecycleBinItem, RestoreResult, DeviceWizardData, SpaceValidationResult, SyncSchedule, ScheduleExecution } from '../types';
 
 interface VersionHistoryViewState {
   isOpen: boolean;
@@ -16,6 +16,8 @@ interface SyncState {
   versionHistory: VersionHistoryViewState;
   isOnboardingWizardOpen: boolean;
   onboardingWizardData: DeviceWizardData;
+  schedules: SyncSchedule[];
+  scheduleExecutions: ScheduleExecution[];
   setFiles: (files: SyncFile[]) => void;
   resolveConflict: (id: string, resolution: 'local' | 'remote' | 'merge') => void;
   setCurrentFolder: (path: string) => void;
@@ -39,6 +41,13 @@ interface SyncState {
   updateOnboardingData: (data: Partial<DeviceWizardData>) => void;
   validateSpace: (requiredSpace: number) => SpaceValidationResult;
   completeOnboarding: () => Device;
+  setSchedules: (schedules: SyncSchedule[]) => void;
+  addSchedule: (schedule: Omit<SyncSchedule, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  updateSchedule: (id: string, updates: Partial<SyncSchedule>) => void;
+  deleteSchedule: (id: string) => void;
+  toggleSchedule: (id: string) => void;
+  runScheduleNow: (id: string) => void;
+  setScheduleExecutions: (executions: ScheduleExecution[]) => void;
 }
 
 export const useSyncStore = create<SyncState>((set, get) => ({
@@ -65,6 +74,8 @@ export const useSyncStore = create<SyncState>((set, get) => ({
       autoSync: true,
     },
   },
+  schedules: [],
+  scheduleExecutions: [],
   setFiles: (files) => set({ files }),
   resolveConflict: (id, resolution) => set({
     conflicts: useSyncStore.getState().conflicts.map(c =>
@@ -242,4 +253,59 @@ export const useSyncStore = create<SyncState>((set, get) => ({
     set({ isOnboardingWizardOpen: false });
     return newDevice;
   },
+  setSchedules: (schedules) => set({ schedules }),
+  addSchedule: (schedule) => {
+    const now = new Date().toISOString();
+    const newSchedule: SyncSchedule = {
+      ...schedule,
+      id: `sch-${Date.now()}`,
+      createdAt: now,
+      updatedAt: now,
+    };
+    set((state) => ({
+      schedules: [...state.schedules, newSchedule],
+    }));
+  },
+  updateSchedule: (id, updates) => set((state) => ({
+    schedules: state.schedules.map(s =>
+      s.id === id ? { ...s, ...updates, updatedAt: new Date().toISOString() } : s
+    ),
+  })),
+  deleteSchedule: (id) => set((state) => ({
+    schedules: state.schedules.filter(s => s.id !== id),
+  })),
+  toggleSchedule: (id) => set((state) => ({
+    schedules: state.schedules.map(s =>
+      s.id === id ? { ...s, enabled: !s.enabled, updatedAt: new Date().toISOString() } : s
+    ),
+  })),
+  runScheduleNow: (id) => {
+    const schedule = get().schedules.find(s => s.id === id);
+    if (schedule) {
+      const execution: ScheduleExecution = {
+        id: `exe-${Date.now()}`,
+        scheduleId: id,
+        folderId: schedule.folderId,
+        status: 'running',
+        startTime: new Date().toISOString(),
+      };
+      set((state) => ({
+        scheduleExecutions: [execution, ...state.scheduleExecutions],
+      }));
+      get().startSync(schedule.folderId);
+      setTimeout(() => {
+        set((state) => ({
+          scheduleExecutions: state.scheduleExecutions.map(e =>
+            e.id === execution.id
+              ? { ...e, status: 'success', endTime: new Date().toISOString(), filesSynced: Math.floor(Math.random() * 10) + 1 }
+              : e
+          ),
+          schedules: state.schedules.map(s =>
+            s.id === id ? { ...s, lastRun: new Date().toISOString() } : s
+          ),
+        }));
+      }, 2000);
+    }
+  },
+  setScheduleExecutions: (executions) => set({ scheduleExecutions: executions }),
 }));

@@ -6,7 +6,7 @@ use std::sync::Mutex;
 mod models;
 mod services;
 
-use models::{RecycleBinItem, RestoreResult};
+use models::{RecycleBinItem, RestoreResult, SyncSchedule, ScheduleExecution, CreateScheduleRequest, UpdateScheduleRequest};
 
 #[derive(Serialize)]
 struct HealthResponse {
@@ -36,6 +36,8 @@ async fn sync_folder(path: web::Path<String>) -> HttpResponse {
 
 struct AppState {
     recycle_bin: Mutex<Vec<RecycleBinItem>>,
+    schedules: Mutex<Vec<SyncSchedule>>,
+    schedule_executions: Mutex<Vec<ScheduleExecution>>,
 }
 
 async fn list_recycle_bin(data: web::Data<AppState>) -> HttpResponse {
@@ -160,6 +162,167 @@ async fn clear_expired_recycle_bin(data: web::Data<AppState>) -> HttpResponse {
     }))
 }
 
+async fn list_schedules(data: web::Data<AppState>) -> HttpResponse {
+    let schedules = data.schedules.lock().unwrap();
+    HttpResponse::Ok().json(&*schedules)
+}
+
+async fn create_schedule(
+    data: web::Data<AppState>,
+    req: web::Json<CreateScheduleRequest>,
+) -> HttpResponse {
+    let now = chrono::Utc::now();
+    let schedule = SyncSchedule {
+        id: format!("sch-{}", now.timestamp_millis()),
+        folder_id: req.folder_id.clone(),
+        folder_name: req.folder_name.clone(),
+        folder_path: req.folder_path.clone(),
+        schedule_type: req.schedule_type.clone(),
+        enabled: req.enabled,
+        weekdays: req.weekdays.clone(),
+        time_range: req.time_range.clone(),
+        interval_minutes: req.interval_minutes,
+        last_run: None,
+        next_run: None,
+        created_at: now.to_rfc3339(),
+        updated_at: now.to_rfc3339(),
+    };
+    
+    let mut schedules = data.schedules.lock().unwrap();
+    schedules.push(schedule.clone());
+    HttpResponse::Created().json(schedule)
+}
+
+async fn update_schedule(
+    data: web::Data<AppState>,
+    path: web::Path<String>,
+    req: web::Json<UpdateScheduleRequest>,
+) -> HttpResponse {
+    let schedule_id = path.into_inner();
+    let now = chrono::Utc::now();
+    let mut schedules = data.schedules.lock().unwrap();
+    
+    if let Some(pos) = schedules.iter().position(|s| s.id == schedule_id) {
+        if let Some(folder_id) = &req.folder_id {
+            schedules[pos].folder_id = folder_id.clone();
+        }
+        if let Some(folder_name) = &req.folder_name {
+            schedules[pos].folder_name = folder_name.clone();
+        }
+        if let Some(folder_path) = &req.folder_path {
+            schedules[pos].folder_path = folder_path.clone();
+        }
+        if let Some(schedule_type) = &req.schedule_type {
+            schedules[pos].schedule_type = schedule_type.clone();
+        }
+        if let Some(enabled) = req.enabled {
+            schedules[pos].enabled = enabled;
+        }
+        if let Some(weekdays) = &req.weekdays {
+            schedules[pos].weekdays = weekdays.clone();
+        }
+        if let Some(time_range) = &req.time_range {
+            schedules[pos].time_range = time_range.clone();
+        }
+        if let Some(interval_minutes) = req.interval_minutes {
+            schedules[pos].interval_minutes = Some(interval_minutes);
+        }
+        schedules[pos].updated_at = now.to_rfc3339();
+        
+        HttpResponse::Ok().json(&schedules[pos])
+    } else {
+        HttpResponse::NotFound().json(serde_json::json!({
+            "success": false,
+            "message": "同步计划不存在"
+        }))
+    }
+}
+
+async fn delete_schedule(
+    data: web::Data<AppState>,
+    path: web::Path<String>,
+) -> HttpResponse {
+    let schedule_id = path.into_inner();
+    let mut schedules = data.schedules.lock().unwrap();
+    
+    if let Some(pos) = schedules.iter().position(|s| s.id == schedule_id) {
+        schedules.remove(pos);
+        HttpResponse::Ok().json(serde_json::json!({
+            "success": true,
+            "message": "同步计划已删除"
+        }))
+    } else {
+        HttpResponse::NotFound().json(serde_json::json!({
+            "success": false,
+            "message": "同步计划不存在"
+        }))
+    }
+}
+
+async fn toggle_schedule(
+    data: web::Data<AppState>,
+    path: web::Path<String>,
+) -> HttpResponse {
+    let schedule_id = path.into_inner();
+    let now = chrono::Utc::now();
+    let mut schedules = data.schedules.lock().unwrap();
+    
+    if let Some(pos) = schedules.iter().position(|s| s.id == schedule_id) {
+        schedules[pos].enabled = !schedules[pos].enabled;
+        schedules[pos].updated_at = now.to_rfc3339();
+        HttpResponse::Ok().json(&schedules[pos])
+    } else {
+        HttpResponse::NotFound().json(serde_json::json!({
+            "success": false,
+            "message": "同步计划不存在"
+        }))
+    }
+}
+
+async fn run_schedule_now(
+    data: web::Data<AppState>,
+    path: web::Path<String>,
+) -> HttpResponse {
+    let schedule_id = path.into_inner();
+    let now = chrono::Utc::now();
+    let mut schedules = data.schedules.lock().unwrap();
+    
+    if let Some(pos) = schedules.iter().position(|s| s.id == schedule_id) {
+        let folder_id = schedules[pos].folder_id.clone();
+        let execution = ScheduleExecution {
+            id: format!("exe-{}", now.timestamp_millis()),
+            schedule_id: schedule_id.clone(),
+            folder_id,
+            status: "running".to_string(),
+            start_time: now.to_rfc3339(),
+            end_time: None,
+            files_synced: None,
+            error_message: None,
+        };
+        
+        let mut executions = data.schedule_executions.lock().unwrap();
+        executions.insert(0, execution);
+        
+        schedules[pos].last_run = Some(now.to_rfc3339());
+        
+        HttpResponse::Ok().json(serde_json::json!({
+            "success": true,
+            "message": "同步任务已启动",
+            "schedule_id": schedule_id
+        }))
+    } else {
+        HttpResponse::NotFound().json(serde_json::json!({
+            "success": false,
+            "message": "同步计划不存在"
+        }))
+    }
+}
+
+async fn list_schedule_executions(data: web::Data<AppState>) -> HttpResponse {
+    let executions = data.schedule_executions.lock().unwrap();
+    HttpResponse::Ok().json(&*executions)
+}
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     env_logger::init();
@@ -167,6 +330,8 @@ async fn main() -> std::io::Result<()> {
     
     let app_state = web::Data::new(AppState {
         recycle_bin: Mutex::new(Vec::new()),
+        schedules: Mutex::new(Vec::new()),
+        schedule_executions: Mutex::new(Vec::new()),
     });
     
     HttpServer::new(move || {
@@ -182,6 +347,13 @@ async fn main() -> std::io::Result<()> {
             .route("/api/recycle-bin/{item_id}/restore", web::post().to(restore_from_recycle_bin))
             .route("/api/recycle-bin/{item_id}", web::delete().to(delete_from_recycle_bin))
             .route("/api/recycle-bin/clear-expired", web::post().to(clear_expired_recycle_bin))
+            .route("/api/schedules", web::get().to(list_schedules))
+            .route("/api/schedules", web::post().to(create_schedule))
+            .route("/api/schedules/{schedule_id}", web::put().to(update_schedule))
+            .route("/api/schedules/{schedule_id}", web::delete().to(delete_schedule))
+            .route("/api/schedules/{schedule_id}/toggle", web::post().to(toggle_schedule))
+            .route("/api/schedules/{schedule_id}/run", web::post().to(run_schedule_now))
+            .route("/api/schedule-executions", web::get().to(list_schedule_executions))
     })
     .bind("127.0.0.1:8080")?
     .run()

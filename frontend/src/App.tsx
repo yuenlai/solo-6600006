@@ -6,8 +6,9 @@ import { VersionHistoryPanel } from './components/VersionHistoryPanel';
 import { VersionComparePanel } from './components/VersionComparePanel';
 import { RecycleBinPanel } from './components/RecycleBinPanel';
 import { DeviceOnboardingWizard } from './components/DeviceOnboardingWizard';
+import { SyncSchedulePanel } from './components/SyncSchedulePanel';
 import { useSyncStore } from './store/sync';
-import { SyncFile, Device, SyncActivity, FileVersion, RecycleBinItem } from './types';
+import { SyncFile, Device, SyncActivity, FileVersion, RecycleBinItem, SyncSchedule } from './types';
 
 const now = new Date();
 
@@ -43,6 +44,42 @@ const mockActivities: SyncActivity[] = [
   { id: 'a6', fileId: '7', fileName: 'data.csv', filePath: '/data/data.csv', status: 'success', action: 'modify', timestamp: new Date(now.getTime() - 2 * 3600000).toISOString(), device: 'Ubuntu Server', size: 102400 },
   { id: 'a7', fileId: '8', fileName: 'old_file.txt', filePath: '/archive/old_file.txt', status: 'success', action: 'delete', timestamp: new Date(now.getTime() - 5 * 3600000).toISOString(), device: 'MacBook Pro' },
   { id: 'a8', fileId: '9', fileName: 'image.png', filePath: '/images/image.png', status: 'failed', action: 'download', timestamp: new Date(now.getTime() - 24 * 3600000).toISOString(), device: 'Windows Desktop', size: 2097152, errorMessage: '文件已被删除' },
+];
+
+const mockFoldersForSchedule = [
+  { id: 'f1', name: '工作文档', path: '/Users/username/Documents/Work' },
+  { id: 'f2', name: '个人照片', path: '/Users/username/Photos' },
+  { id: 'f3', name: '项目代码', path: '/Users/username/Projects' },
+  { id: 'f4', name: '备份数据', path: '/Users/username/Backup' },
+];
+
+const mockSchedules: SyncSchedule[] = [
+  {
+    id: 'sch-1',
+    folderId: 'f1',
+    folderName: '工作文档',
+    folderPath: '/Users/username/Documents/Work',
+    scheduleType: 'workday',
+    enabled: true,
+    weekdays: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
+    timeRange: { start: '09:00', end: '18:00' },
+    createdAt: new Date(now.getTime() - 7 * 86400000).toISOString(),
+    updatedAt: new Date(now.getTime() - 1 * 86400000).toISOString(),
+    lastRun: new Date(now.getTime() - 2 * 3600000).toISOString(),
+  },
+  {
+    id: 'sch-2',
+    folderId: 'f2',
+    folderName: '个人照片',
+    folderPath: '/Users/username/Photos',
+    scheduleType: 'night',
+    enabled: true,
+    weekdays: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'],
+    timeRange: { start: '22:00', end: '06:00' },
+    createdAt: new Date(now.getTime() - 5 * 86400000).toISOString(),
+    updatedAt: new Date(now.getTime() - 3 * 86400000).toISOString(),
+    lastRun: new Date(now.getTime() - 8 * 3600000).toISOString(),
+  },
 ];
 
 const mockRecycleBin: RecycleBinItem[] = [
@@ -103,17 +140,25 @@ const mockRecycleBin: RecycleBinItem[] = [
 ];
 
 const App: React.FC = () => {
-  const [tab, setTab] = useState<'activity' | 'files' | 'devices' | 'conflicts' | 'recyclebin'>('activity');
+  const [tab, setTab] = useState<'activity' | 'files' | 'devices' | 'conflicts' | 'recyclebin' | 'schedule'>('activity');
   const {
     files,
     activities,
     recycleBin,
     versionHistory,
     devices,
+    schedules,
+    scheduleExecutions,
     setFiles,
     setActivities,
     setRecycleBin,
     setDevices,
+    setSchedules,
+    addSchedule,
+    updateSchedule,
+    deleteSchedule,
+    toggleSchedule,
+    runScheduleNow,
     restoreFromRecycleBin,
     deleteFromRecycleBin,
     clearExpiredRecycleBin,
@@ -129,12 +174,15 @@ const App: React.FC = () => {
     if (activities.length === 0) setActivities(mockActivities);
     if (recycleBin.length === 0) setRecycleBin(mockRecycleBin);
     if (devices.length === 0) setDevices(mockDevices);
-  }, [files.length, activities.length, recycleBin.length, devices.length, setFiles, setActivities, setRecycleBin, setDevices]);
+    if (schedules.length === 0) setSchedules(mockSchedules);
+  }, [files.length, activities.length, recycleBin.length, devices.length, schedules.length, setFiles, setActivities, setRecycleBin, setDevices, setSchedules]);
 
   const displayFiles = files.length > 0 ? files : mockFiles;
   const displayActivities = activities.length > 0 ? activities : mockActivities;
   const displayRecycleBin = recycleBin.length > 0 ? recycleBin : mockRecycleBin;
   const displayDevices = devices.length > 0 ? devices : mockDevices;
+  const displaySchedules = schedules.length > 0 ? schedules : mockSchedules;
+  const displayExecutions = scheduleExecutions;
 
   const selectedFile = versionHistory.fileId ? displayFiles.find(f => f.id === versionHistory.fileId) : null;
   const selectedVersions = versionHistory.selectedVersionIds && selectedFile
@@ -187,6 +235,18 @@ const App: React.FC = () => {
             onClearExpired={clearExpiredRecycleBin}
           />
         )}
+        {tab === 'schedule' && (
+          <SyncSchedulePanel
+            schedules={displaySchedules}
+            executions={displayExecutions}
+            folders={mockFoldersForSchedule}
+            onAddSchedule={addSchedule}
+            onUpdateSchedule={updateSchedule}
+            onDeleteSchedule={deleteSchedule}
+            onToggleSchedule={toggleSchedule}
+            onRunNow={runScheduleNow}
+          />
+        )}
       </>
     );
   };
@@ -197,6 +257,7 @@ const App: React.FC = () => {
         <h2 style={{ margin: '0 0 20px', padding: '0 16px', fontSize: '16px' }}>FileSync</h2>
         {[
           { key: 'activity', label: '同步动态' },
+          { key: 'schedule', label: '定时同步' },
           { key: 'files', label: 'Files' },
           { key: 'devices', label: 'Devices' },
           { key: 'conflicts', label: 'Conflicts' },
