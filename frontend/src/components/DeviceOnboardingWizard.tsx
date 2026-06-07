@@ -1,0 +1,419 @@
+import React, { useState, useEffect } from 'react';
+import { Modal, Steps, Form, Input, Select, Space, Card, Checkbox, Button, Progress, Alert, List, Tag, InputNumber, Typography } from 'antd';
+import { PlusOutlined, DeleteOutlined, CheckCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
+import { useSyncStore } from '../store/sync';
+import { WizardStep, SpaceValidationResult } from '../types';
+
+const { Title, Text } = Typography;
+const { Step } = Steps;
+const { Option } = Select;
+
+const stepTitles: Record<WizardStep, string> = {
+  name: '设备命名',
+  space: '空间校验',
+  directory: '同步目录',
+  permissions: '权限确认',
+};
+
+const stepOrder: WizardStep[] = ['name', 'space', 'directory', 'permissions'];
+
+const presetDirectories = [
+  '/Users/Documents',
+  '/Users/Pictures',
+  '/Users/Desktop',
+  '/Users/Downloads',
+  '/Users/Music',
+  '/Users/Videos',
+];
+
+const platformOptions = [
+  { value: 'windows', label: 'Windows', icon: '💻' },
+  { value: 'mac', label: 'macOS', icon: '🍎' },
+  { value: 'linux', label: 'Linux', icon: '🐧' },
+];
+
+export const DeviceOnboardingWizard: React.FC = () => {
+  const {
+    isOnboardingWizardOpen,
+    onboardingWizardData,
+    closeOnboardingWizard,
+    updateOnboardingData,
+    validateSpace,
+    completeOnboarding,
+  } = useSyncStore();
+
+  const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  const [form] = Form.useForm();
+  const [spaceValidation, setSpaceValidation] = useState<SpaceValidationResult | null>(null);
+  const [customDirectory, setCustomDirectory] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const currentStep = stepOrder[currentStepIndex];
+
+  useEffect(() => {
+    if (isOnboardingWizardOpen) {
+      setCurrentStepIndex(0);
+      setSpaceValidation(null);
+      form.resetFields();
+      form.setFieldsValue({
+        name: onboardingWizardData.name,
+        platform: onboardingWizardData.platform,
+        storageTotal: onboardingWizardData.storageTotal / 1024 / 1024 / 1024,
+        storageUsed: onboardingWizardData.storageUsed / 1024 / 1024 / 1024,
+      });
+    }
+  }, [isOnboardingWizardOpen, form, onboardingWizardData]);
+
+  const handleNext = async () => {
+    try {
+      const values = await form.validateFields();
+      
+      if (currentStep === 'name') {
+        updateOnboardingData({
+          name: values.name,
+          platform: values.platform,
+          storageTotal: values.storageTotal * 1024 * 1024 * 1024,
+          storageUsed: values.storageUsed * 1024 * 1024 * 1024,
+        });
+      }
+
+      if (currentStep === 'space') {
+        const result = validateSpace(values.requiredSpace * 1024 * 1024 * 1024);
+        setSpaceValidation(result);
+        if (!result.valid) {
+          return;
+        }
+      }
+
+      setCurrentStepIndex(prev => Math.min(prev + 1, stepOrder.length - 1));
+    } catch {
+      // Validation failed, stay on current step
+    }
+  };
+
+  const handlePrev = () => {
+    setCurrentStepIndex(prev => Math.max(prev - 1, 0));
+  };
+
+  const handleAddDirectory = () => {
+    if (customDirectory && !onboardingWizardData.syncDirectories.includes(customDirectory)) {
+      updateOnboardingData({
+        syncDirectories: [...onboardingWizardData.syncDirectories, customDirectory],
+      });
+      setCustomDirectory('');
+    }
+  };
+
+  const handleRemoveDirectory = (dir: string) => {
+    updateOnboardingData({
+      syncDirectories: onboardingWizardData.syncDirectories.filter(d => d !== dir),
+    });
+  };
+
+  const handleToggleDirectory = (dir: string, checked: boolean) => {
+    if (checked) {
+      if (!onboardingWizardData.syncDirectories.includes(dir)) {
+        updateOnboardingData({
+          syncDirectories: [...onboardingWizardData.syncDirectories, dir],
+        });
+      }
+    } else {
+      handleRemoveDirectory(dir);
+    }
+  };
+
+  const handlePermissionChange = (key: keyof typeof onboardingWizardData.permissions, checked: boolean) => {
+    updateOnboardingData({
+      permissions: {
+        ...onboardingWizardData.permissions,
+        [key]: checked,
+      },
+    });
+  };
+
+  const handleComplete = async () => {
+    setLoading(true);
+    try {
+      completeOnboarding();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const renderStepContent = () => {
+    switch (currentStep) {
+      case 'name':
+        return (
+          <Form form={form} layout="vertical">
+            <Form.Item
+              name="name"
+              label="设备名称"
+              rules={[{ required: true, message: '请输入设备名称' }]}
+            >
+              <Input placeholder="例如：我的 MacBook Pro" size="large" />
+            </Form.Item>
+            <Form.Item
+              name="platform"
+              label="操作系统"
+              rules={[{ required: true, message: '请选择操作系统' }]}
+            >
+              <Select size="large" placeholder="选择操作系统">
+                {platformOptions.map(opt => (
+                  <Option key={opt.value} value={opt.value}>
+                    <span style={{ marginRight: 8 }}>{opt.icon}</span>
+                    {opt.label}
+                  </Option>
+                ))}
+              </Select>
+            </Form.Item>
+            <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+              <Form.Item
+                name="storageTotal"
+                label="总存储容量 (GB)"
+                rules={[
+                  { required: true, message: '请输入总存储容量' },
+                  { type: 'number', min: 1, message: '容量至少为 1 GB' },
+                ]}
+                style={{ marginBottom: 0 }}
+              >
+                <InputNumber size="large" style={{ width: '100%' }} min={1} />
+              </Form.Item>
+              <Form.Item
+                name="storageUsed"
+                label="已使用容量 (GB)"
+                rules={[
+                  { required: true, message: '请输入已使用容量' },
+                  { type: 'number', min: 0, message: '已使用容量不能为负数' },
+                ]}
+                style={{ marginBottom: 0 }}
+              >
+                <InputNumber size="large" style={{ width: '100%' }} min={0} />
+              </Form.Item>
+            </Space>
+          </Form>
+        );
+
+      case 'space':
+        return (
+          <Form form={form} layout="vertical">
+            <Title level={5}>存储空间预估</Title>
+            <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
+              请输入预计需要占用的存储空间，系统将校验设备是否有足够空间。
+            </Text>
+            <Form.Item
+              name="requiredSpace"
+              label="预计需要存储空间 (GB)"
+              rules={[
+                { required: true, message: '请输入预计需要的存储空间' },
+                { type: 'number', min: 0.1, message: '至少需要 0.1 GB' },
+              ]}
+            >
+              <InputNumber size="large" style={{ width: '100%' }} min={0.1} step={0.1} />
+            </Form.Item>
+            {spaceValidation && (
+              <Alert
+                icon={spaceValidation.valid ? <CheckCircleOutlined /> : <ExclamationCircleOutlined />}
+                type={spaceValidation.valid ? 'success' : 'error'}
+                message={spaceValidation.valid ? '空间校验通过' : '空间校验失败'}
+                description={spaceValidation.message}
+                showIcon
+              />
+            )}
+            {onboardingWizardData.storageTotal > 0 && (
+              <Card style={{ marginTop: 16 }}>
+                <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Text strong>总容量</Text>
+                    <Text>{(onboardingWizardData.storageTotal / 1024 / 1024 / 1024).toFixed(1)} GB</Text>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Text strong>已使用</Text>
+                    <Text>{(onboardingWizardData.storageUsed / 1024 / 1024 / 1024).toFixed(1)} GB</Text>
+                  </div>
+                  <Progress
+                    percent={Math.round((onboardingWizardData.storageUsed / onboardingWizardData.storageTotal) * 100)}
+                    status={onboardingWizardData.storageUsed / onboardingWizardData.storageTotal > 0.9 ? 'exception' : 'normal'}
+                  />
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Text strong>可用空间</Text>
+                    <Text>
+                      {((onboardingWizardData.storageTotal - onboardingWizardData.storageUsed) / 1024 / 1024 / 1024).toFixed(1)} GB
+                    </Text>
+                  </div>
+                </Space>
+              </Card>
+            )}
+          </Form>
+        );
+
+      case 'directory':
+        return (
+          <div>
+            <Title level={5}>选择同步目录</Title>
+            <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
+              选择需要同步的文件夹，也可以手动添加自定义目录。
+            </Text>
+            <Card title="常用目录" size="small" style={{ marginBottom: 16 }}>
+              <Space direction="vertical" style={{ width: '100%' }}>
+                {presetDirectories.map(dir => (
+                  <Checkbox
+                    key={dir}
+                    checked={onboardingWizardData.syncDirectories.includes(dir)}
+                    onChange={e => handleToggleDirectory(dir, e.target.checked)}
+                  >
+                    {dir}
+                  </Checkbox>
+                ))}
+              </Space>
+            </Card>
+            <Card title="已选目录" size="small">
+              {onboardingWizardData.syncDirectories.length === 0 ? (
+                <Text type="secondary">暂无选择的目录</Text>
+              ) : (
+                <List
+                  size="small"
+                  dataSource={onboardingWizardData.syncDirectories}
+                  renderItem={item => (
+                    <List.Item
+                      actions={[
+                        <Button
+                          type="text"
+                          danger
+                          size="small"
+                          icon={<DeleteOutlined />}
+                          onClick={() => handleRemoveDirectory(item)}
+                        />,
+                      ]}
+                    >
+                      <Tag color="blue">{item}</Tag>
+                    </List.Item>
+                  )}
+                />
+              )}
+            </Card>
+            <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
+              <Input
+                placeholder="输入自定义目录路径"
+                value={customDirectory}
+                onChange={e => setCustomDirectory(e.target.value)}
+                onPressEnter={handleAddDirectory}
+              />
+              <Button type="primary" icon={<PlusOutlined />} onClick={handleAddDirectory}>
+                添加
+              </Button>
+            </div>
+          </div>
+        );
+
+      case 'permissions':
+        return (
+          <div>
+            <Title level={5}>同步权限配置</Title>
+            <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
+              配置该设备的同步权限，确保数据安全。
+            </Text>
+            <Card size="small">
+              <Space direction="vertical" style={{ width: '100%' }}>
+                <Checkbox
+                  checked={onboardingWizardData.permissions.readFiles}
+                  onChange={e => handlePermissionChange('readFiles', e.target.checked)}
+                >
+                  <Text strong>读取文件</Text>
+                  <Text type="secondary" style={{ display: 'block', marginLeft: 24 }}>
+                    允许该设备读取云端同步的文件
+                  </Text>
+                </Checkbox>
+                <Checkbox
+                  checked={onboardingWizardData.permissions.writeFiles}
+                  onChange={e => handlePermissionChange('writeFiles', e.target.checked)}
+                >
+                  <Text strong>写入文件</Text>
+                  <Text type="secondary" style={{ display: 'block', marginLeft: 24 }}>
+                    允许该设备上传和修改文件
+                  </Text>
+                </Checkbox>
+                <Checkbox
+                  checked={onboardingWizardData.permissions.deleteFiles}
+                  onChange={e => handlePermissionChange('deleteFiles', e.target.checked)}
+                >
+                  <Text strong>删除文件</Text>
+                  <Text type="secondary" style={{ display: 'block', marginLeft: 24 }}>
+                    允许该设备删除云端文件（删除后将进入回收站）
+                  </Text>
+                </Checkbox>
+                <Checkbox
+                  checked={onboardingWizardData.permissions.autoSync}
+                  onChange={e => handlePermissionChange('autoSync', e.target.checked)}
+                >
+                  <Text strong>自动同步</Text>
+                  <Text type="secondary" style={{ display: 'block', marginLeft: 24 }}>
+                    检测到文件变化时自动同步
+                  </Text>
+                </Checkbox>
+              </Space>
+            </Card>
+            <Card title="配置摘要" size="small" style={{ marginTop: 16 }}>
+              <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Text type="secondary">设备名称</Text>
+                  <Text strong>{onboardingWizardData.name || '-'}</Text>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Text type="secondary">操作系统</Text>
+                  <Text strong>
+                    {platformOptions.find(p => p.value === onboardingWizardData.platform)?.label || '-'}
+                  </Text>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Text type="secondary">同步目录数</Text>
+                  <Text strong>{onboardingWizardData.syncDirectories.length} 个</Text>
+                </div>
+              </Space>
+            </Card>
+          </div>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <Modal
+      title={<Title level={4} style={{ margin: 0 }}>新设备接入向导</Title>}
+      open={isOnboardingWizardOpen}
+      onCancel={closeOnboardingWizard}
+      width={640}
+      footer={null}
+      destroyOnClose
+    >
+      <Steps current={currentStepIndex} size="small" style={{ marginBottom: 32 }}>
+        {stepOrder.map(step => (
+          <Step key={step} title={stepTitles[step]} />
+        ))}
+      </Steps>
+      <div style={{ minHeight: 320, marginBottom: 24 }}>
+        {renderStepContent()}
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+        <Button onClick={handlePrev} disabled={currentStepIndex === 0}>
+          上一步
+        </Button>
+        {currentStepIndex < stepOrder.length - 1 ? (
+          <Button type="primary" onClick={handleNext}>
+            下一步
+          </Button>
+        ) : (
+          <Button
+            type="primary"
+            onClick={handleComplete}
+            loading={loading}
+            disabled={onboardingWizardData.syncDirectories.length === 0}
+          >
+            完成配置
+          </Button>
+        )}
+      </div>
+    </Modal>
+  );
+};

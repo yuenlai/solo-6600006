@@ -76,3 +76,26 @@ export interface RestoreResult {
   message: string;
   item?: RecycleBinItem;
 }
+
+export type WizardStep = 'name' | 'space' | 'directory' | 'permissions';
+
+export interface DeviceWizardData {
+  name: string;
+  platform: string;
+  storageTotal: number;
+  storageUsed: number;
+  syncDirectories: string[];
+  permissions: {
+    readFiles: boolean;
+    writeFiles: boolean;
+    deleteFiles: boolean;
+    autoSync: boolean;
+  };
+}
+
+export interface SpaceValidationResult {
+  valid: boolean;
+  availableSpace: number;
+  requiredSpace: number;
+  message: string;
+}

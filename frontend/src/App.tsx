@@ -5,6 +5,7 @@ import { SyncActivityPanel } from './components/SyncActivityPanel';
 import { VersionHistoryPanel } from './components/VersionHistoryPanel';
 import { VersionComparePanel } from './components/VersionComparePanel';
 import { RecycleBinPanel } from './components/RecycleBinPanel';
+import { DeviceOnboardingWizard } from './components/DeviceOnboardingWizard';
 import { useSyncStore } from './store/sync';
 import { SyncFile, Device, SyncActivity, FileVersion, RecycleBinItem } from './types';
 
@@ -108,9 +109,11 @@ const App: React.FC = () => {
     activities,
     recycleBin,
     versionHistory,
+    devices,
     setFiles,
     setActivities,
     setRecycleBin,
+    setDevices,
     restoreFromRecycleBin,
     deleteFromRecycleBin,
     clearExpiredRecycleBin,
@@ -125,11 +128,13 @@ const App: React.FC = () => {
     setFiles(mockFiles);
     setActivities(mockActivities);
     setRecycleBin(mockRecycleBin);
-  }, [setFiles, setActivities, setRecycleBin]);
+    setDevices(mockDevices);
+  }, [setFiles, setActivities, setRecycleBin, setDevices]);
 
   const displayFiles = files.length > 0 ? files : mockFiles;
   const displayActivities = activities.length > 0 ? activities : mockActivities;
   const displayRecycleBin = recycleBin.length > 0 ? recycleBin : mockRecycleBin;
+  const displayDevices = devices.length > 0 ? devices : mockDevices;
 
   const selectedFile = versionHistory.fileId ? displayFiles.find(f => f.id === versionHistory.fileId) : null;
   const selectedVersions = versionHistory.selectedVersionIds && selectedFile
@@ -172,7 +177,7 @@ const App: React.FC = () => {
             onViewHistory={(fileId) => openVersionHistory(fileId)}
           />
         )}
-        {tab === 'devices' && <DevicePanel devices={mockDevices} />}
+        {tab === 'devices' && <DevicePanel devices={displayDevices} />}
         {tab === 'conflicts' && <div style={{ padding: '16px' }}><h3>Conflicts</h3><p style={{ color: '#999' }}>No conflicts</p></div>}
         {tab === 'recyclebin' && (
           <RecycleBinPanel
@@ -211,6 +216,7 @@ const App: React.FC = () => {
       <main style={{ flex: 1, overflow: 'auto', background: '#fafafa' }}>
         {renderContent()}
       </main>
+      <DeviceOnboardingWizard />
     </div>
   );
 };

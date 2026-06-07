@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { SyncFile, SyncFolder, Device, SyncConflict, SyncActivity, FileVersion, RecycleBinItem, RestoreResult } from '../types';
+import { SyncFile, SyncFolder, Device, SyncConflict, SyncActivity, FileVersion, RecycleBinItem, RestoreResult, DeviceWizardData, SpaceValidationResult } from '../types';
 
 interface VersionHistoryViewState {
   isOpen: boolean;
@@ -14,6 +14,8 @@ interface SyncState {
   recycleBin: RecycleBinItem[];
   currentFolder: string; syncProgress: number;
   versionHistory: VersionHistoryViewState;
+  isOnboardingWizardOpen: boolean;
+  onboardingWizardData: DeviceWizardData;
   setFiles: (files: SyncFile[]) => void;
   resolveConflict: (id: string, resolution: 'local' | 'remote' | 'merge') => void;
   setCurrentFolder: (path: string) => void;
@@ -30,6 +32,13 @@ interface SyncState {
   restoreFromRecycleBin: (itemId: string) => RestoreResult;
   deleteFromRecycleBin: (itemId: string) => void;
   clearExpiredRecycleBin: () => void;
+  setDevices: (devices: Device[]) => void;
+  addDevice: (device: Device) => void;
+  openOnboardingWizard: () => void;
+  closeOnboardingWizard: () => void;
+  updateOnboardingData: (data: Partial<DeviceWizardData>) => void;
+  validateSpace: (requiredSpace: number) => SpaceValidationResult;
+  completeOnboarding: () => Device;
 }
 
 export const useSyncStore = create<SyncState>((set, get) => ({
@@ -41,6 +50,20 @@ export const useSyncStore = create<SyncState>((set, get) => ({
     fileId: null,
     selectedVersionIds: null,
     showCompare: false,
+  },
+  isOnboardingWizardOpen: false,
+  onboardingWizardData: {
+    name: '',
+    platform: 'windows',
+    storageTotal: 107374182400,
+    storageUsed: 0,
+    syncDirectories: [],
+    permissions: {
+      readFiles: true,
+      writeFiles: true,
+      deleteFiles: false,
+      autoSync: true,
+    },
   },
   setFiles: (files) => set({ files }),
   resolveConflict: (id, resolution) => set({
@@ -164,5 +187,59 @@ export const useSyncStore = create<SyncState>((set, get) => ({
         return now <= expiresAt && !item.restored;
       })
     }));
+  },
+  setDevices: (devices) => set({ devices }),
+  addDevice: (device) => set((state) => ({
+    devices: [...state.devices, device],
+  })),
+  openOnboardingWizard: () => set({
+    isOnboardingWizardOpen: true,
+    onboardingWizardData: {
+      name: '',
+      platform: 'windows',
+      storageTotal: 107374182400,
+      storageUsed: 0,
+      syncDirectories: [],
+      permissions: {
+        readFiles: true,
+        writeFiles: true,
+        deleteFiles: false,
+        autoSync: true,
+      },
+    },
+  }),
+  closeOnboardingWizard: () => set({
+    isOnboardingWizardOpen: false,
+  }),
+  updateOnboardingData: (data) => set((state) => ({
+    onboardingWizardData: { ...state.onboardingWizardData, ...data },
+  })),
+  validateSpace: (requiredSpace) => {
+    const data = get().onboardingWizardData;
+    const availableSpace = data.storageTotal - data.storageUsed;
+    const valid = availableSpace >= requiredSpace;
+    return {
+      valid,
+      availableSpace,
+      requiredSpace,
+      message: valid
+        ? `空间充足，可用 ${(availableSpace / 1024 / 1024 / 1024).toFixed(1)} GB`
+        : `空间不足，需要 ${(requiredSpace / 1024 / 1024 / 1024).toFixed(1)} GB，可用 ${(availableSpace / 1024 / 1024 / 1024).toFixed(1)} GB`,
+    };
+  },
+  completeOnboarding: () => {
+    const data = get().onboardingWizardData;
+    const newDevice: Device = {
+      id: `device-${Date.now()}`,
+      name: data.name,
+      platform: data.platform,
+      lastSeen: new Date().toISOString(),
+      status: 'online',
+      storageUsed: data.storageUsed,
+      storageTotal: data.storageTotal,
+    };
+    get().addDevice(newDevice);
+    set({ isOnboardingWizardOpen: false });
+    return newDevice;
   },
 }));
