@@ -8,7 +8,7 @@ import { RecycleBinPanel } from './components/RecycleBinPanel';
 import { DeviceOnboardingWizard } from './components/DeviceOnboardingWizard';
 import { SyncSchedulePanel } from './components/SyncSchedulePanel';
 import { ShareLinksPanel } from './components/ShareLinksPanel';
-
+import { ShareAccessPage } from './components/ShareAccessPage';
 import { useSyncStore } from './store/sync';
 import { SyncFile, Device, SyncActivity, FileVersion, RecycleBinItem, SyncSchedule } from './types';
 
@@ -141,8 +141,15 @@ const mockRecycleBin: RecycleBinItem[] = [
   },
 ];
 
+const getShareTokenFromPath = (): string | null => {
+  const path = window.location.pathname;
+  const match = path.match(/^\/share\/([^/]+)/);
+  return match ? match[1] : null;
+};
+
 const App: React.FC = () => {
   const [tab, setTab] = useState<'activity' | 'files' | 'devices' | 'conflicts' | 'recyclebin' | 'schedule'>('activity');
+  const [shareToken, setShareToken] = useState<string | null>(getShareTokenFromPath());
   const {
     files,
     activities,
@@ -172,7 +179,16 @@ const App: React.FC = () => {
     closeCompare,
     restoreVersion,
     openShareLinksPanel,
+    closeShareLinksPanel,
   } = useSyncStore();
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setShareToken(getShareTokenFromPath());
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   useEffect(() => {
     if (files.length === 0) setFiles(mockFiles);
@@ -198,6 +214,15 @@ const App: React.FC = () => {
     : [];
 
   const shareLinksFile = shareLinksPanelFileId ? displayFiles.find(f => f.id === shareLinksPanelFileId) : null;
+
+  const handleBackToHome = () => {
+    window.history.pushState({}, '', '/');
+    setShareToken(null);
+  };
+
+  if (shareToken) {
+    return <ShareAccessPage token={shareToken} onBack={handleBackToHome} />;
+  }
 
   const renderContent = () => {
     if (shareLinksPanelOpen && shareLinksFile) {
@@ -288,6 +313,9 @@ const App: React.FC = () => {
             setTab(t.key as any);
             if (versionHistory.isOpen) {
               closeVersionHistory();
+            }
+            if (shareLinksPanelOpen) {
+              closeShareLinksPanel();
             }
           }} style={{
             display: 'block', width: '100%', padding: '12px 16px', border: 'none', textAlign: 'left',

@@ -1,10 +1,14 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import { ShareLinkAccessResult } from '../types';
+import { useSyncStore } from '../store/sync';
 
 interface Props {
   token: string;
   onBack: () => void;
 }
+
+const API_BASE = 'http://127.0.0.1:8080/api';
 
 const formatSize = (size?: number) => {
   if (!size) return '';
@@ -19,29 +23,53 @@ const formatTime = (timestamp: string) => {
   return date.toLocaleString('zh-CN');
 };
 
+const formatExpiryTime = (timestamp: string) => {
+  const date = new Date(timestamp);
+  const now = new Date();
+  const diffMs = date.getTime() - now.getTime();
+  
+  if (diffMs <= 0) return '已过期';
+  
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 60) return `${diffMins}分钟后过期`;
+  if (diffHours < 24) return `${diffHours}小时后过期`;
+  return `${diffDays}天后过期`;
+};
+
 export const ShareAccessPage: React.FC<Props> = ({ token, onBack }) => {
   const [loading, setLoading] = useState(true);
   const [result, setResult] = useState<ShareLinkAccessResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const { updateShareLink } = useSyncStore();
 
   useEffect(() => {
     const accessShareLink = async () => {
+      setLoading(true);
+      setError(null);
       try {
-        const response = await fetch(`http://127.0.0.1:8080/api/share-links/access/${token}`);
-        const data = await response.json();
+        const response = await axios.get(`${API_BASE}/share-links/access/${token}`);
+        const data: ShareLinkAccessResult = response.data;
         setResult(data);
-      } catch (error) {
-        console.error('Failed to access share link:', error);
-        setResult({
-          valid: false,
-          message: '无法连接到服务器',
-        });
+        
+        if (data.valid && data.shareLink) {
+          updateShareLink(data.shareLink.id, {
+            accessCount: data.shareLink.accessCount,
+            isActive: data.shareLink.isActive,
+          });
+        }
+      } catch (err) {
+        console.error('Failed to access share link:', err);
+        setError('无法连接到服务器，请稍后重试');
       } finally {
         setLoading(false);
       }
     };
 
     accessShareLink();
-  }, [token]);
+  }, [token, updateShareLink]);
 
   if (loading) {
     return (
@@ -50,19 +78,19 @@ export const ShareAccessPage: React.FC<Props> = ({ token, onBack }) => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: '#f5f5f5',
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
       }}>
-        <div style={{ textAlign: 'center' }}>
+        <div style={{ textAlign: 'center', color: '#fff' }}>
           <div style={{
-            width: '40px',
-            height: '40px',
-            border: '3px solid #e0e0e0',
-            borderTop: '3px solid #1976d2',
+            width: '50px',
+            height: '50px',
+            border: '4px solid rgba(255,255,255,0.3)',
+            borderTop: '4px solid #fff',
             borderRadius: '50%',
             animation: 'spin 1s linear infinite',
             margin: '0 auto 16px',
           }} />
-          <p style={{ color: '#666' }}>加载中...</p>
+          <p style={{ fontSize: '16px' }}>加载中...</p>
         </div>
         <style>{`
           @keyframes spin {
@@ -74,53 +102,57 @@ export const ShareAccessPage: React.FC<Props> = ({ token, onBack }) => {
     );
   }
 
-  if (!result || !result.valid) {
+  if (error || !result || !result.valid) {
     return (
       <div style={{
         minHeight: '100vh',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: '#f5f5f5',
+        background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
         padding: '20px',
       }}>
         <div style={{
-          maxWidth: '400px',
+          maxWidth: '440px',
           width: '100%',
-          padding: '40px',
+          padding: '48px 32px',
           background: '#fff',
-          borderRadius: '12px',
-          boxShadow: '0 2px 12px rgba(0,0,0,0.1)',
+          borderRadius: '16px',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
           textAlign: 'center',
         }}>
           <div style={{
-            width: '64px',
-            height: '64px',
+            width: '80px',
+            height: '80px',
             borderRadius: '50%',
             background: '#ffebee',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            margin: '0 auto 20px',
-            fontSize: '32px',
+            margin: '0 auto 24px',
+            fontSize: '40px',
           }}>
-            ⚠️
+            🔒
           </div>
-          <h2 style={{ margin: '0 0 12px', color: '#c62828' }}>链接无效</h2>
-          <p style={{ color: '#666', margin: '0 0 24px' }}>
-            {result?.message || '该分享链接不存在'}
+          <h2 style={{ margin: '0 0 12px', color: '#c62828', fontSize: '24px' }}>链接已失效</h2>
+          <p style={{ color: '#666', margin: '0 0 32px', fontSize: '15px', lineHeight: '1.6' }}>
+            {result?.message || error || '该分享链接不存在或已被删除'}
           </p>
           <button
             onClick={onBack}
             style={{
-              padding: '10px 24px',
+              padding: '12px 32px',
               border: 'none',
-              borderRadius: '6px',
-              background: '#1976d2',
+              borderRadius: '8px',
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
               color: '#fff',
               cursor: 'pointer',
-              fontSize: '14px',
+              fontSize: '15px',
+              fontWeight: 500,
+              transition: 'transform 0.2s',
             }}
+            onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.02)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
           >
             返回首页
           </button>
@@ -141,90 +173,123 @@ export const ShareAccessPage: React.FC<Props> = ({ token, onBack }) => {
       padding: '20px',
     }}>
       <div style={{
-        maxWidth: '500px',
+        maxWidth: '520px',
         width: '100%',
         padding: '40px',
         background: '#fff',
-        borderRadius: '16px',
-        boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+        borderRadius: '20px',
+        boxShadow: '0 12px 40px rgba(0,0,0,0.2)',
       }}>
         <div style={{
-          width: '80px',
-          height: '80px',
-          borderRadius: '16px',
-          background: '#e3f2fd',
+          width: '88px',
+          height: '88px',
+          borderRadius: '20px',
+          background: 'linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           margin: '0 auto 24px',
-          fontSize: '40px',
+          fontSize: '44px',
         }}>
           📄
         </div>
 
-        <h2 style={{ margin: '0 0 8px', textAlign: 'center', color: '#1a1a1a' }}>
+        <h2 style={{ 
+          margin: '0 0 8px', 
+          textAlign: 'center', 
+          color: '#1a1a1a',
+          fontSize: '22px',
+          fontWeight: 600,
+          wordBreak: 'break-all',
+        }}>
           {link.fileName}
         </h2>
-        <p style={{ textAlign: 'center', color: '#666', margin: '0 0 24px' }}>
-          分享人：{link.createdBy}
+        <p style={{ textAlign: 'center', color: '#666', margin: '0 0 28px', fontSize: '14px' }}>
+          分享人：<span style={{ color: '#333', fontWeight: 500 }}>{link.createdBy}</span>
         </p>
 
         <div style={{
-          padding: '20px',
+          padding: '24px',
           background: '#f8f9fa',
           borderRadius: '12px',
-          marginBottom: '24px',
+          marginBottom: '28px',
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-            <span style={{ color: '#666', fontSize: '14px' }}>版本</span>
-            <span style={{ fontWeight: 500, fontSize: '14px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
+            <span style={{ color: '#888', fontSize: '14px' }}>版本</span>
+            <span style={{ fontWeight: 600, fontSize: '14px', color: '#333' }}>
               {link.versionNumber ? `v${link.versionNumber}` : '最新版本'}
             </span>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-            <span style={{ color: '#666', fontSize: '14px' }}>文件大小</span>
-            <span style={{ fontWeight: 500, fontSize: '14px' }}>{formatSize(link.size)}</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
+            <span style={{ color: '#888', fontSize: '14px' }}>文件大小</span>
+            <span style={{ fontWeight: 600, fontSize: '14px', color: '#333' }}>{formatSize(link.size)}</span>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-            <span style={{ color: '#666', fontSize: '14px' }}>创建时间</span>
-            <span style={{ fontWeight: 500, fontSize: '14px' }}>{formatTime(link.createdAt)}</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
+            <span style={{ color: '#888', fontSize: '14px' }}>创建时间</span>
+            <span style={{ fontWeight: 500, fontSize: '14px', color: '#555' }}>{formatTime(link.createdAt)}</span>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ color: '#666', fontSize: '14px' }}>有效期至</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
+            <span style={{ color: '#888', fontSize: '14px' }}>有效期至</span>
             <span style={{ fontWeight: 500, fontSize: '14px', color: '#2e7d32' }}>
               {formatTime(link.expiresAt)}
+            </span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ color: '#888', fontSize: '14px' }}>访问次数</span>
+            <span style={{ fontWeight: 600, fontSize: '14px', color: '#1976d2' }}>
+              {link.accessCount} 次
+              {link.maxAccessCount && ` / ${link.maxAccessCount}`}
             </span>
           </div>
         </div>
 
         <div style={{ display: 'flex', gap: '12px' }}>
           <button
-            onClick={() => alert('下载功能演示')}
+            onClick={() => alert('下载功能演示 - 实际项目中会下载对应版本的文件')}
             style={{
               flex: 1,
-              padding: '14px',
+              padding: '16px',
               border: 'none',
-              borderRadius: '8px',
-              background: '#1976d2',
+              borderRadius: '10px',
+              background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
               color: '#fff',
               cursor: 'pointer',
-              fontSize: '15px',
-              fontWeight: 500,
+              fontSize: '16px',
+              fontWeight: 600,
+              transition: 'transform 0.2s, box-shadow 0.2s',
+              boxShadow: '0 4px 12px rgba(25,118,210,0.3)',
+            }}
+            onMouseEnter={(e) => { 
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.boxShadow = '0 6px 20px rgba(25,118,210,0.4)';
+            }}
+            onMouseLeave={(e) => { 
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(25,118,210,0.3)';
             }}
           >
             ⬇️ 下载文件
           </button>
           <button
-            onClick={() => alert('预览功能演示')}
+            onClick={() => alert('预览功能演示 - 实际项目中会打开文件预览')}
             style={{
-              padding: '14px 20px',
-              border: '1px solid #e0e0e0',
-              borderRadius: '8px',
+              padding: '16px 24px',
+              border: '2px solid #e0e0e0',
+              borderRadius: '10px',
               background: '#fff',
-              color: '#333',
+              color: '#555',
               cursor: 'pointer',
-              fontSize: '15px',
+              fontSize: '16px',
               fontWeight: 500,
+              transition: 'all 0.2s',
+            }}
+            onMouseEnter={(e) => { 
+              e.currentTarget.style.borderColor = '#1976d2';
+              e.currentTarget.style.color = '#1976d2';
+            }}
+            onMouseLeave={(e) => { 
+              e.currentTarget.style.borderColor = '#e0e0e0';
+              e.currentTarget.style.color = '#555';
             }}
           >
             👁️ 预览
@@ -232,16 +297,38 @@ export const ShareAccessPage: React.FC<Props> = ({ token, onBack }) => {
         </div>
 
         <div style={{
-          marginTop: '20px',
-          padding: '12px',
+          marginTop: '24px',
+          padding: '14px 16px',
           background: '#e8f5e9',
-          borderRadius: '8px',
+          borderRadius: '10px',
           textAlign: 'center',
-          fontSize: '13px',
+          fontSize: '14px',
           color: '#2e7d32',
+          fontWeight: 500,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '8px',
         }}>
-          ✓ 链接有效，您可以安全下载
+          <span>✓</span>
+          <span>链接有效，您可以安全下载 · {formatExpiryTime(link.expiresAt)}</span>
         </div>
+
+        <button
+          onClick={onBack}
+          style={{
+            width: '100%',
+            marginTop: '16px',
+            padding: '12px',
+            border: 'none',
+            background: 'transparent',
+            color: '#888',
+            cursor: 'pointer',
+            fontSize: '14px',
+          }}
+        >
+          ← 返回首页
+        </button>
       </div>
     </div>
   );

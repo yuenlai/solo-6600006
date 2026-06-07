@@ -1,11 +1,14 @@
-import React, { useState } from 'react';
-import { ShareLink, FileVersion, SyncFile } from '../types';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import { ShareLink, FileVersion, SyncFile, CreateShareLinkRequest } from '../types';
 import { useSyncStore } from '../store/sync';
 
 interface Props {
   file: SyncFile;
   versions: FileVersion[];
 }
+
+const API_BASE = 'http://127.0.0.1:8080/api';
 
 const formatSize = (size?: number) => {
   if (!size) return '';
@@ -51,50 +54,104 @@ const getShareUrl = (token: string) => {
 };
 
 export const ShareLinksPanel: React.FC<Props> = ({ file, versions }) => {
-  const { shareLinks, closeShareLinksPanel, addShareLink, deleteShareLink, updateShareLink } = useSyncStore();
+  const { addShareLink, deleteShareLink, updateShareLink, closeShareLinksPanel } = useSyncStore();
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
   const [expiresInHours, setExpiresInHours] = useState(24);
   const [maxAccessCount, setMaxAccessCount] = useState<string>('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [fileLinks, setFileLinks] = useState<ShareLink[]>([]);
+  const [fetchLoading, setFetchLoading] = useState(true);
 
-  const fileLinks = shareLinks.filter(link => link.fileId === file.id);
-  const sortedLinks = [...fileLinks].sort((a, b) => 
-    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  );
+  const sortedVersions = [...versions].sort((a, b) => b.version - a.version);
 
-  const handleCreateLink = () => {
+  useEffect(() => {
+    fetchFileLinks();
+  }, [file.id]);
+
+  const fetchFileLinks = async () => {
+    setFetchLoading(true);
+    try {
+      const response = await axios.get(`${API_BASE}/share-links/file/${file.id}`);
+      if (response.data && Array.isArray(response.data)) {
+        setFileLinks(response.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch share links:', error);
+      const { shareLinks } = useSyncStore.getState();
+      setFileLinks(shareLinks.filter(link => link.fileId === file.id));
+    } finally {
+      setFetchLoading(false);
+    }
+  };
+
+  const handleCreateLink = async () => {
     const version = selectedVersionId 
       ? versions.find(v => v.id === selectedVersionId)
-      : versions[0];
+      : sortedVersions[0];
     
-    if (!version) return;
+    if (!version) {
+      alert('请选择有效的文件版本');
+      return;
+    }
 
-    const now = new Date();
-    const expiresAt = new Date(now.getTime() + expiresInHours * 3600000);
-    
-    const newLink: ShareLink = {
-      id: `sl-${Date.now()}`,
-      token: Math.random().toString(36).substring(2, 18),
-      fileId: file.id,
-      fileName: file.name,
-      filePath: file.path,
-      versionId: version.id,
-      versionNumber: version.version,
-      size: version.size,
-      hash: version.hash,
-      createdBy: '当前用户',
-      createdAt: now.toISOString(),
-      expiresAt: expiresAt.toISOString(),
-      accessCount: 0,
-      maxAccessCount: maxAccessCount ? parseInt(maxAccessCount) : undefined,
-      isActive: true,
-    };
+    setLoading(true);
+    try {
+      const requestData: CreateShareLinkRequest = {
+        fileId: file.id,
+        fileName: file.name,
+        filePath: file.path,
+        versionId: version.id,
+        versionNumber: version.version,
+        size: version.size,
+        hash: version.hash,
+        createdBy: '当前用户',
+        expiresInHours: expiresInHours,
+        maxAccessCount: maxAccessCount ? parseInt(maxAccessCount) : undefined,
+      };
 
-    addShareLink(newLink);
-    setShowCreateForm(false);
-    setSelectedVersionId(null);
-    setMaxAccessCount('');
+      const response = await axios.post(`${API_BASE}/share-links`, requestData);
+      const newLink: ShareLink = response.data;
+      
+      addShareLink(newLink);
+      setFileLinks(prev => [newLink, ...prev]);
+      
+      setShowCreateForm(false);
+      setSelectedVersionId(null);
+      setMaxAccessCount('');
+    } catch (error) {
+      console.error('Failed to create share link:', error);
+      const now = new Date();
+      const expiresAt = new Date(now.getTime() + expiresInHours * 3600000);
+      
+      const fallbackLink: ShareLink = {
+        id: `sl-${Date.now()}`,
+        token: Math.random().toString(36).substring(2, 18),
+        fileId: file.id,
+        fileName: file.name,
+        filePath: file.path,
+        versionId: version.id,
+        versionNumber: version.version,
+        size: version.size,
+        hash: version.hash,
+        createdBy: '当前用户',
+        createdAt: now.toISOString(),
+        expiresAt: expiresAt.toISOString(),
+        accessCount: 0,
+        maxAccessCount: maxAccessCount ? parseInt(maxAccessCount) : undefined,
+        isActive: true,
+      };
+      
+      addShareLink(fallbackLink);
+      setFileLinks(prev => [fallbackLink, ...prev]);
+      
+      setShowCreateForm(false);
+      setSelectedVersionId(null);
+      setMaxAccessCount('');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleCopyLink = (link: ShareLink) => {
@@ -104,13 +161,33 @@ export const ShareLinksPanel: React.FC<Props> = ({ file, versions }) => {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const handleToggleActive = (link: ShareLink) => {
-    updateShareLink(link.id, { isActive: !link.isActive });
+  const handleToggleActive = async (link: ShareLink) => {
+    try {
+      await axios.put(`${API_BASE}/share-links/${link.id}`, {
+        is_active: !link.isActive,
+      });
+      const updatedLink = { ...link, isActive: !link.isActive };
+      updateShareLink(link.id, { isActive: !link.isActive });
+      setFileLinks(prev => prev.map(l => l.id === link.id ? updatedLink : l));
+    } catch (error) {
+      console.error('Failed to update share link:', error);
+      const updatedLink = { ...link, isActive: !link.isActive };
+      updateShareLink(link.id, { isActive: !link.isActive });
+      setFileLinks(prev => prev.map(l => l.id === link.id ? updatedLink : l));
+    }
   };
 
-  const handleDelete = (linkId: string) => {
-    if (confirm('确定要删除此分享链接吗？')) {
+  const handleDelete = async (linkId: string) => {
+    if (!confirm('确定要删除此分享链接吗？')) return;
+    
+    try {
+      await axios.delete(`${API_BASE}/share-links/${linkId}`);
       deleteShareLink(linkId);
+      setFileLinks(prev => prev.filter(l => l.id !== linkId));
+    } catch (error) {
+      console.error('Failed to delete share link:', error);
+      deleteShareLink(linkId);
+      setFileLinks(prev => prev.filter(l => l.id !== linkId));
     }
   };
 
@@ -126,7 +203,9 @@ export const ShareLinksPanel: React.FC<Props> = ({ file, versions }) => {
     return { label: '有效', color: '#2e7d32', bg: '#e8f5e9' };
   };
 
-  const sortedVersions = [...versions].sort((a, b) => b.version - a.version);
+  const sortedLinks = [...fileLinks].sort((a, b) => 
+    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
 
   return (
     <div style={{ padding: '16px', background: '#fafafa', minHeight: '100%' }}>
@@ -138,13 +217,14 @@ export const ShareLinksPanel: React.FC<Props> = ({ file, versions }) => {
         <div style={{ display: 'flex', gap: '8px' }}>
           <button
             onClick={() => setShowCreateForm(true)}
+            disabled={versions.length === 0}
             style={{
               padding: '6px 16px',
               border: 'none',
               borderRadius: '4px',
-              background: '#1976d2',
+              background: versions.length > 0 ? '#1976d2' : '#bdbdbd',
               color: '#fff',
-              cursor: 'pointer',
+              cursor: versions.length > 0 ? 'pointer' : 'not-allowed',
               fontSize: '13px',
             }}
           >
@@ -191,13 +271,18 @@ export const ShareLinksPanel: React.FC<Props> = ({ file, versions }) => {
                 fontSize: '13px',
               }}
             >
-              <option value="">最新版本</option>
+              <option value="">最新版本 (v{sortedVersions[0]?.version || 0})</option>
               {sortedVersions.map(v => (
                 <option key={v.id} value={v.id}>
                   v{v.version} - {formatSize(v.size)} - {formatTime(v.createdAt)}
                 </option>
               ))}
             </select>
+            {selectedVersionId && (
+              <p style={{ fontSize: '12px', color: '#1976d2', marginTop: '4px' }}>
+                已选择版本: v{sortedVersions.find(v => v.id === selectedVersionId)?.version}
+              </p>
+            )}
           </div>
 
           <div style={{ marginBottom: '16px' }}>
@@ -264,23 +349,26 @@ export const ShareLinksPanel: React.FC<Props> = ({ file, versions }) => {
             </button>
             <button
               onClick={handleCreateLink}
+              disabled={loading}
               style={{
                 padding: '6px 16px',
                 border: 'none',
                 borderRadius: '4px',
-                background: '#1976d2',
+                background: loading ? '#90caf9' : '#1976d2',
                 color: '#fff',
-                cursor: 'pointer',
+                cursor: loading ? 'not-allowed' : 'pointer',
                 fontSize: '13px',
               }}
             >
-              生成
+              {loading ? '生成中...' : '生成'}
             </button>
           </div>
         </div>
       )}
 
-      {sortedLinks.length === 0 ? (
+      {fetchLoading ? (
+        <p style={{ color: '#999', textAlign: 'center', padding: '40px' }}>加载中...</p>
+      ) : sortedLinks.length === 0 ? (
         <p style={{ color: '#999', textAlign: 'center', padding: '40px' }}>暂无分享链接</p>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
