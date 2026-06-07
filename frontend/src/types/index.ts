@@ -134,3 +134,40 @@ export interface ScheduleExecution {
   filesSynced?: number;
   errorMessage?: string;
 }
+
+export interface ShareLink {
+  id: string;
+  token: string;
+  fileId: string;
+  fileName: string;
+  filePath: string;
+  versionId?: string;
+  versionNumber?: number;
+  size: number;
+  hash: string;
+  createdBy: string;
+  createdAt: string;
+  expiresAt: string;
+  accessCount: number;
+  maxAccessCount?: number;
+  isActive: boolean;
+}
+
+export interface CreateShareLinkRequest {
+  fileId: string;
+  fileName: string;
+  filePath: string;
+  versionId?: string;
+  versionNumber?: number;
+  size: number;
+  hash: string;
+  createdBy: string;
+  expiresInHours: number;
+  maxAccessCount?: number;
+}
+
+export interface ShareLinkAccessResult {
+  valid: boolean;
+  message: string;
+  shareLink?: ShareLink;
+}

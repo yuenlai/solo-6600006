@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { SyncFile, SyncFolder, Device, SyncConflict, SyncActivity, FileVersion, RecycleBinItem, RestoreResult, DeviceWizardData, SpaceValidationResult, SyncSchedule, ScheduleExecution } from '../types';
+import { SyncFile, SyncFolder, Device, SyncConflict, SyncActivity, FileVersion, RecycleBinItem, RestoreResult, DeviceWizardData, SpaceValidationResult, SyncSchedule, ScheduleExecution, ShareLink } from '../types';
 
 interface VersionHistoryViewState {
   isOpen: boolean;
@@ -18,6 +18,9 @@ interface SyncState {
   onboardingWizardData: DeviceWizardData;
   schedules: SyncSchedule[];
   scheduleExecutions: ScheduleExecution[];
+  shareLinks: ShareLink[];
+  shareLinksPanelOpen: boolean;
+  shareLinksPanelFileId: string | null;
   setFiles: (files: SyncFile[]) => void;
   resolveConflict: (id: string, resolution: 'local' | 'remote' | 'merge') => void;
   setCurrentFolder: (path: string) => void;
@@ -48,6 +51,12 @@ interface SyncState {
   toggleSchedule: (id: string) => void;
   runScheduleNow: (id: string) => void;
   setScheduleExecutions: (executions: ScheduleExecution[]) => void;
+  setShareLinks: (links: ShareLink[]) => void;
+  addShareLink: (link: ShareLink) => void;
+  updateShareLink: (id: string, updates: Partial<ShareLink>) => void;
+  deleteShareLink: (id: string) => void;
+  openShareLinksPanel: (fileId: string) => void;
+  closeShareLinksPanel: () => void;
 }
 
 export const useSyncStore = create<SyncState>((set, get) => ({
@@ -76,6 +85,9 @@ export const useSyncStore = create<SyncState>((set, get) => ({
   },
   schedules: [],
   scheduleExecutions: [],
+  shareLinks: [],
+  shareLinksPanelOpen: false,
+  shareLinksPanelFileId: null,
   setFiles: (files) => set({ files }),
   resolveConflict: (id, resolution) => set({
     conflicts: useSyncStore.getState().conflicts.map(c =>
@@ -308,4 +320,24 @@ export const useSyncStore = create<SyncState>((set, get) => ({
     }
   },
   setScheduleExecutions: (executions) => set({ scheduleExecutions: executions }),
+  setShareLinks: (links) => set({ shareLinks: links }),
+  addShareLink: (link) => set((state) => ({
+    shareLinks: [link, ...state.shareLinks],
+  })),
+  updateShareLink: (id, updates) => set((state) => ({
+    shareLinks: state.shareLinks.map(l =>
+      l.id === id ? { ...l, ...updates } : l
+    ),
+  })),
+  deleteShareLink: (id) => set((state) => ({
+    shareLinks: state.shareLinks.filter(l => l.id !== id),
+  })),
+  openShareLinksPanel: (fileId) => set({
+    shareLinksPanelOpen: true,
+    shareLinksPanelFileId: fileId,
+  }),
+  closeShareLinksPanel: () => set({
+    shareLinksPanelOpen: false,
+    shareLinksPanelFileId: null,
+  }),
 }));

@@ -6,7 +6,7 @@ use std::sync::Mutex;
 mod models;
 mod services;
 
-use models::{RecycleBinItem, RestoreResult, SyncSchedule, ScheduleExecution, CreateScheduleRequest, UpdateScheduleRequest};
+use models::{RecycleBinItem, RestoreResult, SyncSchedule, ScheduleExecution, CreateScheduleRequest, UpdateScheduleRequest, ShareLink, CreateShareLinkRequest, ShareLinkAccessResult, UpdateShareLinkRequest};
 
 #[derive(Serialize)]
 struct HealthResponse {
@@ -38,6 +38,7 @@ struct AppState {
     recycle_bin: Mutex<Vec<RecycleBinItem>>,
     schedules: Mutex<Vec<SyncSchedule>>,
     schedule_executions: Mutex<Vec<ScheduleExecution>>,
+    share_links: Mutex<Vec<ShareLink>>,
 }
 
 async fn list_recycle_bin(data: web::Data<AppState>) -> HttpResponse {
@@ -323,6 +324,228 @@ async fn list_schedule_executions(data: web::Data<AppState>) -> HttpResponse {
     HttpResponse::Ok().json(&*executions)
 }
 
+fn generate_token() -> String {
+    use rand::Rng;
+    const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    let mut rng = rand::thread_rng();
+    (0..16)
+        .map(|_| {
+            let idx = rng.gen_range(0..CHARSET.len());
+            CHARSET[idx] as char
+        })
+        .collect()
+}
+
+async fn list_share_links(data: web::Data<AppState>) -> HttpResponse {
+    let links = data.share_links.lock().unwrap();
+    let now = chrono::Utc::now();
+    let links_with_status: Vec<ShareLink> = links
+        .iter()
+        .map(|link| {
+            let mut link = link.clone();
+            if let Ok(expires) = chrono::DateTime::parse_from_rfc3339(&link.expires_at) {
+                let expires_utc = expires.with_timezone(&chrono::Utc);
+                let expired = now > expires_utc;
+                let max_reached = link.max_access_count.map_or(false, |max| link.access_count >= max);
+                link.is_active = link.is_active && !expired && !max_reached;
+            }
+            link
+        })
+        .collect();
+    HttpResponse::Ok().json(&links_with_status)
+}
+
+async fn create_share_link(
+    data: web::Data<AppState>,
+    req: web::Json<CreateShareLinkRequest>,
+) -> HttpResponse {
+    let now = chrono::Utc::now();
+    let expires_at = now + chrono::Duration::hours(req.expires_in_hours as i64);
+    let token = generate_token();
+    
+    let link = ShareLink {
+        id: format!("sl-{}", now.timestamp_millis()),
+        token,
+        file_id: req.file_id.clone(),
+        file_name: req.file_name.clone(),
+        file_path: req.file_path.clone(),
+        version_id: req.version_id.clone(),
+        version_number: req.version_number,
+        size: req.size,
+        hash: req.hash.clone(),
+        created_by: req.created_by.clone(),
+        created_at: now.to_rfc3339(),
+        expires_at: expires_at.to_rfc3339(),
+        access_count: 0,
+        max_access_count: req.max_access_count,
+        is_active: true,
+    };
+    
+    let mut links = data.share_links.lock().unwrap();
+    links.insert(0, link.clone());
+    HttpResponse::Created().json(link)
+}
+
+async fn get_share_link(
+    data: web::Data<AppState>,
+    path: web::Path<String>,
+) -> HttpResponse {
+    let link_id = path.into_inner();
+    let links = data.share_links.lock().unwrap();
+    
+    if let Some(link) = links.iter().find(|l| l.id == link_id) {
+        let mut link = link.clone();
+        let now = chrono::Utc::now();
+        if let Ok(expires) = chrono::DateTime::parse_from_rfc3339(&link.expires_at) {
+            let expires_utc = expires.with_timezone(&chrono::Utc);
+            let expired = now > expires_utc;
+            let max_reached = link.max_access_count.map_or(false, |max| link.access_count >= max);
+            link.is_active = link.is_active && !expired && !max_reached;
+        }
+        HttpResponse::Ok().json(&link)
+    } else {
+        HttpResponse::NotFound().json(serde_json::json!({
+            "success": false,
+            "message": "分享链接不存在"
+        }))
+    }
+}
+
+async fn update_share_link(
+    data: web::Data<AppState>,
+    path: web::Path<String>,
+    req: web::Json<UpdateShareLinkRequest>,
+) -> HttpResponse {
+    let link_id = path.into_inner();
+    let now = chrono::Utc::now();
+    let mut links = data.share_links.lock().unwrap();
+    
+    if let Some(pos) = links.iter().position(|l| l.id == link_id) {
+        if let Some(is_active) = req.is_active {
+            links[pos].is_active = is_active;
+        }
+        if let Some(expires_at) = &req.expires_at {
+            links[pos].expires_at = expires_at.clone();
+        }
+        if let Some(max_access_count) = req.max_access_count {
+            links[pos].max_access_count = Some(max_access_count);
+        }
+        
+        HttpResponse::Ok().json(&links[pos])
+    } else {
+        HttpResponse::NotFound().json(serde_json::json!({
+            "success": false,
+            "message": "分享链接不存在"
+        }))
+    }
+}
+
+async fn delete_share_link(
+    data: web::Data<AppState>,
+    path: web::Path<String>,
+) -> HttpResponse {
+    let link_id = path.into_inner();
+    let mut links = data.share_links.lock().unwrap();
+    
+    if let Some(pos) = links.iter().position(|l| l.id == link_id) {
+        links.remove(pos);
+        HttpResponse::Ok().json(serde_json::json!({
+            "success": true,
+            "message": "分享链接已删除"
+        }))
+    } else {
+        HttpResponse::NotFound().json(serde_json::json!({
+            "success": false,
+            "message": "分享链接不存在"
+        }))
+    }
+}
+
+async fn access_share_link(
+    data: web::Data<AppState>,
+    path: web::Path<String>,
+) -> HttpResponse {
+    let token = path.into_inner();
+    let now = chrono::Utc::now();
+    let mut links = data.share_links.lock().unwrap();
+    
+    if let Some(pos) = links.iter().position(|l| l.token == token) {
+        let mut link = links[pos].clone();
+        
+        if !link.is_active {
+            return HttpResponse::Ok().json(ShareLinkAccessResult {
+                valid: false,
+                message: "分享链接已被禁用".to_string(),
+                share_link: None,
+            });
+        }
+        
+        if let Ok(expires) = chrono::DateTime::parse_from_rfc3339(&link.expires_at) {
+            let expires_utc = expires.with_timezone(&chrono::Utc);
+            if now > expires_utc {
+                links[pos].is_active = false;
+                return HttpResponse::Ok().json(ShareLinkAccessResult {
+                    valid: false,
+                    message: "分享链接已过期".to_string(),
+                    share_link: None,
+                });
+            }
+        }
+        
+        if let Some(max) = link.max_access_count {
+            if link.access_count >= max {
+                links[pos].is_active = false;
+                return HttpResponse::Ok().json(ShareLinkAccessResult {
+                    valid: false,
+                    message: "分享链接已达到最大访问次数".to_string(),
+                    share_link: None,
+                });
+            }
+        }
+        
+        links[pos].access_count += 1;
+        link.access_count = links[pos].access_count;
+        
+        HttpResponse::Ok().json(ShareLinkAccessResult {
+            valid: true,
+            message: "访问成功".to_string(),
+            share_link: Some(link),
+        })
+    } else {
+        HttpResponse::NotFound().json(ShareLinkAccessResult {
+            valid: false,
+            message: "分享链接不存在".to_string(),
+            share_link: None,
+        })
+    }
+}
+
+async fn list_file_share_links(
+    data: web::Data<AppState>,
+    path: web::Path<String>,
+) -> HttpResponse {
+    let file_id = path.into_inner();
+    let links = data.share_links.lock().unwrap();
+    let now = chrono::Utc::now();
+    
+    let file_links: Vec<ShareLink> = links
+        .iter()
+        .filter(|l| l.file_id == file_id)
+        .map(|link| {
+            let mut link = link.clone();
+            if let Ok(expires) = chrono::DateTime::parse_from_rfc3339(&link.expires_at) {
+                let expires_utc = expires.with_timezone(&chrono::Utc);
+                let expired = now > expires_utc;
+                let max_reached = link.max_access_count.map_or(false, |max| link.access_count >= max);
+                link.is_active = link.is_active && !expired && !max_reached;
+            }
+            link
+        })
+        .collect();
+    
+    HttpResponse::Ok().json(&file_links)
+}
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     env_logger::init();
@@ -332,6 +555,7 @@ async fn main() -> std::io::Result<()> {
         recycle_bin: Mutex::new(Vec::new()),
         schedules: Mutex::new(Vec::new()),
         schedule_executions: Mutex::new(Vec::new()),
+        share_links: Mutex::new(Vec::new()),
     });
     
     HttpServer::new(move || {
@@ -354,6 +578,13 @@ async fn main() -> std::io::Result<()> {
             .route("/api/schedules/{schedule_id}/toggle", web::post().to(toggle_schedule))
             .route("/api/schedules/{schedule_id}/run", web::post().to(run_schedule_now))
             .route("/api/schedule-executions", web::get().to(list_schedule_executions))
+            .route("/api/share-links", web::get().to(list_share_links))
+            .route("/api/share-links", web::post().to(create_share_link))
+            .route("/api/share-links/{link_id}", web::get().to(get_share_link))
+            .route("/api/share-links/{link_id}", web::put().to(update_share_link))
+            .route("/api/share-links/{link_id}", web::delete().to(delete_share_link))
+            .route("/api/share-links/access/{token}", web::get().to(access_share_link))
+            .route("/api/share-links/file/{file_id}", web::get().to(list_file_share_links))
     })
     .bind("127.0.0.1:8080")?
     .run()

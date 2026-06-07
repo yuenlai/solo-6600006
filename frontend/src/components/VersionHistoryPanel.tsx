@@ -7,9 +7,10 @@ interface Props {
   onSelectVersions: (oldVersionId: string, newVersionId: string) => void;
   onRestore: (version: FileVersion) => void;
   onClose: () => void;
+  onShare: () => void;
 }
 
-export const VersionHistoryPanel: React.FC<Props> = ({ file, onSelectVersions, onRestore, onClose }) => {
+export const VersionHistoryPanel: React.FC<Props> = ({ file, onSelectVersions, onRestore, onClose, onShare }) => {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   const sortedVersions = [...file.versions].sort((a, b) => b.version - a.version);
@@ -49,19 +50,35 @@ export const VersionHistoryPanel: React.FC<Props> = ({ file, onSelectVersions, o
           <h3 style={{ margin: '0 0 4px' }}>版本历史</h3>
           <p style={{ margin: 0, fontSize: '13px', color: '#666' }}>{file.name}</p>
         </div>
-        <button
-          onClick={onClose}
-          style={{
-            padding: '6px 16px',
-            border: '1px solid #ddd',
-            borderRadius: '4px',
-            background: '#fff',
-            cursor: 'pointer',
-            fontSize: '13px',
-          }}
-        >
-          返回文件列表
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            onClick={onShare}
+            style={{
+              padding: '6px 16px',
+              border: 'none',
+              borderRadius: '4px',
+              background: '#43a047',
+              color: '#fff',
+              cursor: 'pointer',
+              fontSize: '13px',
+            }}
+          >
+            分享
+          </button>
+          <button
+            onClick={onClose}
+            style={{
+              padding: '6px 16px',
+              border: '1px solid #ddd',
+              borderRadius: '4px',
+              background: '#fff',
+              cursor: 'pointer',
+              fontSize: '13px',
+            }}
+          >
+            返回文件列表
+          </button>
+        </div>
       </div>
 
       {selectedIds.length > 0 && (

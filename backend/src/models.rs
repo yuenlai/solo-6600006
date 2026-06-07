@@ -115,3 +115,50 @@ pub struct UpdateScheduleRequest {
     pub time_range: Option<TimeRange>,
     pub interval_minutes: Option<u32>,
 }
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ShareLink {
+    pub id: String,
+    pub token: String,
+    pub file_id: String,
+    pub file_name: String,
+    pub file_path: String,
+    pub version_id: Option<String>,
+    pub version_number: Option<u32>,
+    pub size: u64,
+    pub hash: String,
+    pub created_by: String,
+    pub created_at: String,
+    pub expires_at: String,
+    pub access_count: u32,
+    pub max_access_count: Option<u32>,
+    pub is_active: bool,
+}
+
+#[derive(Deserialize)]
+pub struct CreateShareLinkRequest {
+    pub file_id: String,
+    pub file_name: String,
+    pub file_path: String,
+    pub version_id: Option<String>,
+    pub version_number: Option<u32>,
+    pub size: u64,
+    pub hash: String,
+    pub created_by: String,
+    pub expires_in_hours: u32,
+    pub max_access_count: Option<u32>,
+}
+
+#[derive(Serialize)]
+pub struct ShareLinkAccessResult {
+    pub valid: bool,
+    pub message: String,
+    pub share_link: Option<ShareLink>,
+}
+
+#[derive(Deserialize)]
+pub struct UpdateShareLinkRequest {
+    pub is_active: Option<bool>,
+    pub expires_at: Option<String>,
+    pub max_access_count: Option<u32>,
+}

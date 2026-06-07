@@ -7,6 +7,8 @@ import { VersionComparePanel } from './components/VersionComparePanel';
 import { RecycleBinPanel } from './components/RecycleBinPanel';
 import { DeviceOnboardingWizard } from './components/DeviceOnboardingWizard';
 import { SyncSchedulePanel } from './components/SyncSchedulePanel';
+import { ShareLinksPanel } from './components/ShareLinksPanel';
+
 import { useSyncStore } from './store/sync';
 import { SyncFile, Device, SyncActivity, FileVersion, RecycleBinItem, SyncSchedule } from './types';
 
@@ -149,6 +151,8 @@ const App: React.FC = () => {
     devices,
     schedules,
     scheduleExecutions,
+    shareLinksPanelOpen,
+    shareLinksPanelFileId,
     setFiles,
     setActivities,
     setRecycleBin,
@@ -167,6 +171,7 @@ const App: React.FC = () => {
     selectVersionsForCompare,
     closeCompare,
     restoreVersion,
+    openShareLinksPanel,
   } = useSyncStore();
 
   useEffect(() => {
@@ -192,7 +197,18 @@ const App: React.FC = () => {
       ].filter(Boolean) as FileVersion[]
     : [];
 
+  const shareLinksFile = shareLinksPanelFileId ? displayFiles.find(f => f.id === shareLinksPanelFileId) : null;
+
   const renderContent = () => {
+    if (shareLinksPanelOpen && shareLinksFile) {
+      return (
+        <ShareLinksPanel
+          file={shareLinksFile}
+          versions={shareLinksFile.versions}
+        />
+      );
+    }
+
     if (versionHistory.isOpen && selectedFile) {
       if (versionHistory.showCompare && selectedVersions.length === 2) {
         return (
@@ -212,6 +228,10 @@ const App: React.FC = () => {
           onSelectVersions={(oldId, newId) => selectVersionsForCompare(oldId, newId)}
           onRestore={(version) => restoreVersion(selectedFile.id, version)}
           onClose={closeVersionHistory}
+          onShare={() => {
+            closeVersionHistory();
+            openShareLinksPanel(selectedFile.id);
+          }}
         />
       );
     }
@@ -223,6 +243,7 @@ const App: React.FC = () => {
           <FileList
             files={displayFiles}
             onViewHistory={(fileId) => openVersionHistory(fileId)}
+            onShare={(fileId) => openShareLinksPanel(fileId)}
           />
         )}
         {tab === 'devices' && <DevicePanel devices={displayDevices} />}
