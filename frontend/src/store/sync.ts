@@ -23,7 +23,9 @@ interface SyncState {
   shareLinksPanelFileId: string | null;
   largeFileTransfers: LargeFileTransferItem[];
   setFiles: (files: SyncFile[]) => void;
+  setConflicts: (conflicts: SyncConflict[]) => void;
   resolveConflict: (id: string, resolution: 'local' | 'remote' | 'merge') => void;
+  batchResolveConflicts: (ids: string[], resolution: 'local' | 'remote' | 'merge') => void;
   setCurrentFolder: (path: string) => void;
   startSync: (folderId: string) => void;
   addActivity: (activity: SyncActivity) => void;
@@ -99,9 +101,14 @@ export const useSyncStore = create<SyncState>((set, get) => ({
   shareLinksPanelOpen: false,
   shareLinksPanelFileId: null,
   setFiles: (files) => set({ files }),
+  setConflicts: (conflicts) => set({ conflicts }),
   resolveConflict: (id, resolution) => set({
     conflicts: useSyncStore.getState().conflicts.map(c =>
-      c.id === id ? { ...c, resolved: true, resolution } : c)
+      c.id === id ? { ...c, resolved: true, resolution, resolvedAt: new Date().toISOString(), resolvedBy: '用户' } : c)
+  }),
+  batchResolveConflicts: (ids, resolution) => set({
+    conflicts: useSyncStore.getState().conflicts.map(c =>
+      ids.includes(c.id) ? { ...c, resolved: true, resolution, resolvedAt: new Date().toISOString(), resolvedBy: '用户' } : c)
   }),
   setCurrentFolder: (path) => set({ currentFolder: path }),
   startSync: () => set({ syncProgress: 0 }),

@@ -34,9 +34,21 @@ export interface Device {
   status: 'online' | 'offline'; storageUsed: number; storageTotal: number;
 }
 
+export type ConflictReason = 'content_modified' | 'both_modified' | 'name_conflict' | 'delete_modify_conflict';
+
 export interface SyncConflict {
-  id: string; filePath: string; localVersion: FileVersion;
-  remoteVersion: FileVersion; resolved: boolean; resolution?: 'local' | 'remote' | 'merge';
+  id: string;
+  fileId: string;
+  fileName: string;
+  filePath: string;
+  localVersion: FileVersion;
+  remoteVersion: FileVersion;
+  resolved: boolean;
+  resolution?: 'local' | 'remote' | 'merge';
+  reason: ConflictReason;
+  reasonDescription: string;
+  resolvedAt?: string;
+  resolvedBy?: string;
 }
 
 export type SyncActivityStatus = 'success' | 'failed' | 'conflict' | 'pending';

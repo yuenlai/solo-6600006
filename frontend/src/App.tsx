@@ -10,8 +10,9 @@ import { SyncSchedulePanel } from './components/SyncSchedulePanel';
 import { ShareLinksPanel } from './components/ShareLinksPanel';
 import { ShareAccessPage } from './components/ShareAccessPage';
 import { LargeFileTransferPanel } from './components/LargeFileTransferPanel';
+import { ConflictResolutionCenter } from './components/ConflictResolutionCenter';
 import { useSyncStore } from './store/sync';
-import { SyncFile, Device, SyncActivity, FileVersion, RecycleBinItem, SyncSchedule, LargeFileTransferItem } from './types';
+import { SyncFile, Device, SyncActivity, FileVersion, RecycleBinItem, SyncSchedule, LargeFileTransferItem, SyncConflict } from './types';
 
 const now = new Date();
 
@@ -159,6 +160,128 @@ const mockLargeFileTransfers: LargeFileTransferItem[] = [
   },
 ];
 
+const mockConflicts: SyncConflict[] = [
+  {
+    id: 'conflict-1',
+    fileId: '3',
+    fileName: 'img001.jpg',
+    filePath: '/photos/img001.jpg',
+    localVersion: {
+      id: 'v-local-1',
+      version: 3,
+      size: 3145728,
+      hash: 'localhash1234567890abcdef',
+      createdAt: new Date(now.getTime() - 2 * 3600000).toISOString(),
+      author: '张三',
+      changeType: 'modified',
+      device: 'MacBook Pro',
+    },
+    remoteVersion: {
+      id: 'v-remote-1',
+      version: 4,
+      size: 3670016,
+      hash: 'remotehashabcdef1234567890',
+      createdAt: new Date(now.getTime() - 1 * 3600000).toISOString(),
+      author: '李四',
+      changeType: 'modified',
+      device: 'Windows Desktop',
+    },
+    resolved: false,
+    reason: 'both_modified',
+    reasonDescription: '本地和远程设备在同一时间段内分别修改了该文件，内容存在差异需要手动确认。',
+  },
+  {
+    id: 'conflict-2',
+    fileId: '10',
+    fileName: '项目方案.docx',
+    filePath: '/docs/项目方案.docx',
+    localVersion: {
+      id: 'v-local-2',
+      version: 2,
+      size: 512000,
+      hash: 'doclocal1234567890abcdef',
+      createdAt: new Date(now.getTime() - 5 * 3600000).toISOString(),
+      author: '王五',
+      changeType: 'modified',
+      device: 'MacBook Pro',
+    },
+    remoteVersion: {
+      id: 'v-remote-2',
+      version: 2,
+      size: 524288,
+      hash: 'docremoteabcdef1234567890',
+      createdAt: new Date(now.getTime() - 3 * 3600000).toISOString(),
+      author: '张三',
+      changeType: 'modified',
+      device: 'Ubuntu Server',
+    },
+    resolved: false,
+    reason: 'content_modified',
+    reasonDescription: '文件内容在本地被修改，但远程已有更新版本。',
+  },
+  {
+    id: 'conflict-3',
+    fileId: '11',
+    fileName: 'data_backup.sql',
+    filePath: '/backup/data_backup.sql',
+    localVersion: {
+      id: 'v-local-3',
+      version: 1,
+      size: 10485760,
+      hash: 'sqllocal1234567890abcdef',
+      createdAt: new Date(now.getTime() - 24 * 3600000).toISOString(),
+      author: '李四',
+      changeType: 'deleted',
+      device: 'Windows Desktop',
+    },
+    remoteVersion: {
+      id: 'v-remote-3',
+      version: 2,
+      size: 15728640,
+      hash: 'sqlremoteabcdef1234567890',
+      createdAt: new Date(now.getTime() - 12 * 3600000).toISOString(),
+      author: '王五',
+      changeType: 'modified',
+      device: 'Ubuntu Server',
+    },
+    resolved: false,
+    reason: 'delete_modify_conflict',
+    reasonDescription: '本地已删除该文件，但远程在删除后又进行了修改。',
+  },
+  {
+    id: 'conflict-4',
+    fileId: '12',
+    fileName: 'config.json',
+    filePath: '/config/config.json',
+    localVersion: {
+      id: 'v-local-4',
+      version: 1,
+      size: 2048,
+      hash: 'configlocal1234567890abcd',
+      createdAt: new Date(now.getTime() - 48 * 3600000).toISOString(),
+      author: '张三',
+      changeType: 'added',
+      device: 'MacBook Pro',
+    },
+    remoteVersion: {
+      id: 'v-remote-4',
+      version: 1,
+      size: 3072,
+      hash: 'configremoteabcdef12345678',
+      createdAt: new Date(now.getTime() - 36 * 3600000).toISOString(),
+      author: '李四',
+      changeType: 'added',
+      device: 'Windows Desktop',
+    },
+    resolved: true,
+    resolution: 'remote',
+    reason: 'name_conflict',
+    reasonDescription: '两个不同内容的文件使用了相同的文件名。',
+    resolvedAt: new Date(now.getTime() - 6 * 3600000).toISOString(),
+    resolvedBy: '用户',
+  },
+];
+
 const mockRecycleBin: RecycleBinItem[] = [
   {
     id: 'rb1',
@@ -228,6 +351,7 @@ const App: React.FC = () => {
   const {
     files,
     activities,
+    conflicts,
     recycleBin,
     versionHistory,
     devices,
@@ -238,6 +362,9 @@ const App: React.FC = () => {
     largeFileTransfers,
     setFiles,
     setActivities,
+    setConflicts,
+    resolveConflict,
+    batchResolveConflicts,
     setRecycleBin,
     setDevices,
     setSchedules,
@@ -275,14 +402,16 @@ const App: React.FC = () => {
     const state = useSyncStore.getState();
     if (state.files.length === 0) setFiles(mockFiles);
     if (state.activities.length === 0) setActivities(mockActivities);
+    if (state.conflicts.length === 0) setConflicts(mockConflicts);
     if (state.recycleBin.length === 0) setRecycleBin(mockRecycleBin);
     if (state.devices.length === 0) setDevices(mockDevices);
     if (state.schedules.length === 0) setSchedules(mockSchedules);
     if (state.largeFileTransfers.length === 0) setLargeFileTransfers(mockLargeFileTransfers);
-  }, [setFiles, setActivities, setRecycleBin, setDevices, setSchedules, setLargeFileTransfers]);
+  }, [setFiles, setActivities, setConflicts, setRecycleBin, setDevices, setSchedules, setLargeFileTransfers]);
 
   const displayFiles = files.length > 0 ? files : mockFiles;
   const displayActivities = activities.length > 0 ? activities : mockActivities;
+  const displayConflicts = conflicts.length > 0 ? conflicts : mockConflicts;
   const displayRecycleBin = recycleBin.length > 0 ? recycleBin : mockRecycleBin;
   const displayDevices = devices.length > 0 ? devices : mockDevices;
   const displaySchedules = schedules.length > 0 ? schedules : mockSchedules;
@@ -381,7 +510,13 @@ const App: React.FC = () => {
           />
         )}
         {tab === 'devices' && <DevicePanel devices={displayDevices} />}
-        {tab === 'conflicts' && <div style={{ padding: '16px' }}><h3>Conflicts</h3><p style={{ color: '#999' }}>No conflicts</p></div>}
+        {tab === 'conflicts' && (
+          <ConflictResolutionCenter
+            conflicts={displayConflicts}
+            onResolve={resolveConflict}
+            onBatchResolve={batchResolveConflicts}
+          />
+        )}
         {tab === 'recyclebin' && (
           <RecycleBinPanel
             items={displayRecycleBin}
@@ -423,9 +558,9 @@ const App: React.FC = () => {
           { key: 'activity', label: '同步动态' },
           { key: 'largetransfers', label: '大文件传输' },
           { key: 'schedule', label: '定时同步' },
-          { key: 'files', label: 'Files' },
-          { key: 'devices', label: 'Devices' },
-          { key: 'conflicts', label: 'Conflicts' },
+          { key: 'files', label: '文件列表' },
+          { key: 'devices', label: '设备管理' },
+          { key: 'conflicts', label: '冲突处理' },
           { key: 'recyclebin', label: '回收站' }
         ].map(t => (
           <button key={t.key} onClick={() => {
