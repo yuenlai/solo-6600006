@@ -16,9 +16,10 @@ import { OfflineSyncPanel } from './components/OfflineSyncPanel';
 import { DirectorySnapshotPanel } from './components/DirectorySnapshotPanel';
 import { IgnoreRulesPanel } from './components/IgnoreRulesPanel';
 import { DeviceHealthPanel } from './components/DeviceHealthPanel';
+import { NotificationCenter } from './components/NotificationCenter';
 import { useSyncStore } from './store/sync';
 import { useNetworkStatus } from './hooks/useNetworkStatus';
-import { SyncFile, Device, SyncActivity, FileVersion, RecycleBinItem, SyncSchedule, LargeFileTransferItem, OfflineChangeAction, DeviceHealthMetrics } from './types';
+import { SyncFile, Device, SyncActivity, FileVersion, RecycleBinItem, SyncSchedule, LargeFileTransferItem, OfflineChangeAction, DeviceHealthMetrics, Notification, NotificationAction } from './types';
 
 const now = new Date();
 
@@ -297,6 +298,15 @@ const App: React.FC = () => {
   const isOnlineStore = useSyncStore(state => state.isOnline);
   const isManualOfflineMode = useSyncStore(state => state.isManualOfflineMode);
   const toggleManualOfflineMode = useSyncStore(state => state.toggleManualOfflineMode);
+  const notifications = useSyncStore(state => state.notifications);
+  const isNotificationCenterOpen = useSyncStore(state => state.isNotificationCenterOpen);
+  const addNotification = useSyncStore(state => state.addNotification);
+  const markNotificationAsRead = useSyncStore(state => state.markNotificationAsRead);
+  const markAllNotificationsAsRead = useSyncStore(state => state.markAllNotificationsAsRead);
+  const removeNotification = useSyncStore(state => state.removeNotification);
+  const clearAllNotifications = useSyncStore(state => state.clearAllNotifications);
+  const toggleNotificationCenter = useSyncStore(state => state.toggleNotificationCenter);
+  const closeNotificationCenter = useSyncStore(state => state.closeNotificationCenter);
   
   const setFiles = useSyncStore(state => state.setFiles);
   const setActivities = useSyncStore(state => state.setActivities);
@@ -359,7 +369,48 @@ const App: React.FC = () => {
     if (state.schedules.length === 0) setSchedules(mockSchedules);
     if (state.largeFileTransfers.length === 0) setLargeFileTransfers(mockLargeFileTransfers);
     loadOfflineChanges();
-  }, [setFiles, setActivities, setRecycleBin, setDevices, setSchedules, setLargeFileTransfers, loadOfflineChanges]);
+
+    if (state.notifications.length === 0) {
+      addNotification({
+        type: 'sync_success',
+        title: '同步完成',
+        message: '工作文档目录已成功同步，共同步 12 个文件',
+        priority: 'low',
+        actions: [
+          { label: '查看详情', type: 'navigate', target: 'activity' },
+        ],
+      });
+      addNotification({
+        type: 'sync_conflict',
+        title: '发现 2 个同步冲突',
+        message: '文件 "img001.jpg" 和 "项目方案.docx" 存在冲突，需要手动处理',
+        priority: 'urgent',
+        actions: [
+          { label: '立即处理', type: 'navigate', target: 'conflicts' },
+        ],
+      });
+      addNotification({
+        type: 'sync_failed',
+        title: '同步失败',
+        message: '文件 "backup.zip" 上传失败：网络连接中断',
+        priority: 'high',
+        actions: [
+          { label: '查看详情', type: 'navigate', target: 'activity' },
+          { label: '重试', type: 'navigate', target: 'largetransfers' },
+        ],
+      });
+      addNotification({
+        type: 'storage_insufficient',
+        title: '存储空间预警',
+        message: '您的存储空间已使用 85%，建议及时清理或扩容',
+        priority: 'high',
+        actions: [
+          { label: '查看空间分析', type: 'navigate', target: 'storage' },
+          { label: '清理回收站', type: 'navigate', target: 'recyclebin' },
+        ],
+      });
+    }
+  }, [setFiles, setActivities, setRecycleBin, setDevices, setSchedules, setLargeFileTransfers, loadOfflineChanges, addNotification]);
 
   useEffect(() => {
     if (!isManualOfflineMode) {
@@ -460,6 +511,34 @@ const App: React.FC = () => {
         }
       }, index * 300);
     });
+  };
+
+  const handleNotificationAction = (action: NotificationAction, notification: Notification) => {
+    if (action.type === 'navigate' && action.target) {
+      switch (action.target) {
+        case 'conflicts':
+          setTab('conflicts');
+          break;
+        case 'activity':
+          setTab('activity');
+          break;
+        case 'storage':
+          setTab('storage');
+          break;
+        case 'largetransfers':
+          setTab('largetransfers');
+          break;
+        default:
+          if (action.target && action.target.startsWith('tab:')) {
+            const tabName = action.target.replace('tab:', '') as any;
+            setTab(tabName);
+          }
+      }
+      closeNotificationCenter();
+    } else if (action.type === 'callback' && action.callback) {
+      action.callback();
+    }
+    markNotificationAsRead(notification.id);
   };
 
   if (shareToken) {
@@ -580,7 +659,51 @@ const App: React.FC = () => {
   return (
     <div style={{ display: 'flex', height: '100vh', fontFamily: 'sans-serif' }}>
       <nav style={{ width: '200px', background: '#263238', color: '#fff', padding: '20px 0', display: 'flex', flexDirection: 'column' }}>
-        <h2 style={{ margin: '0 0 20px', padding: '0 16px', fontSize: '16px' }}>FileSync</h2>
+        <h2 style={{ margin: '0 0 16px', padding: '0 16px', fontSize: '16px' }}>FileSync</h2>
+        <div style={{ padding: '0 12px', marginBottom: '16px' }}>
+          <button
+            onClick={toggleNotificationCenter}
+            style={{
+              width: '100%',
+              padding: '10px 14px',
+              borderRadius: '8px',
+              border: 'none',
+              background: isNotificationCenterOpen ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.08)',
+              color: '#fff',
+              cursor: 'pointer',
+              fontSize: '14px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              transition: 'all 0.2s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(255,255,255,0.15)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = isNotificationCenterOpen ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.08)';
+            }}
+          >
+            <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span>🔔</span>
+              通知中心
+            </span>
+            {notifications.filter(n => !n.read).length > 0 && (
+              <span style={{
+                background: '#f44336',
+                color: '#fff',
+                fontSize: '11px',
+                padding: '2px 7px',
+                borderRadius: '10px',
+                fontWeight: 'bold',
+                minWidth: '18px',
+                textAlign: 'center',
+              }}>
+                {notifications.filter(n => !n.read).length}
+              </span>
+            )}
+          </button>
+        </div>
         {[
           { key: 'activity', label: '同步动态' },
           { key: 'largetransfers', label: '大文件传输' },
@@ -808,6 +931,17 @@ const App: React.FC = () => {
           onRemove={removeOfflineChange}
           onClose={toggleOfflinePanel}
           onToggleOfflineMode={toggleManualOfflineMode}
+        />
+      )}
+      {isNotificationCenterOpen && (
+        <NotificationCenter
+          notifications={notifications}
+          onClose={closeNotificationCenter}
+          onMarkAsRead={markNotificationAsRead}
+          onMarkAllAsRead={markAllNotificationsAsRead}
+          onRemove={removeNotification}
+          onClearAll={clearAllNotifications}
+          onAction={handleNotificationAction}
         />
       )}
     </div>

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { SyncFile, SyncFolder, Device, SyncConflict, SyncActivity, FileVersion, RecycleBinItem, RestoreResult, DeviceWizardData, SpaceValidationResult, SyncSchedule, ScheduleExecution, ShareLink, LargeFileTransferItem, StorageAnalysisData, OfflineChange, SyncProgress, DirectorySnapshot, RestoreSnapshotResult, SnapshotFileItem, IgnoreRule, IgnoreRuleMatchResult } from '../types';
+import { SyncFile, SyncFolder, Device, SyncConflict, SyncActivity, FileVersion, RecycleBinItem, RestoreResult, DeviceWizardData, SpaceValidationResult, SyncSchedule, ScheduleExecution, ShareLink, LargeFileTransferItem, StorageAnalysisData, OfflineChange, SyncProgress, DirectorySnapshot, RestoreSnapshotResult, SnapshotFileItem, IgnoreRule, IgnoreRuleMatchResult, Notification, NotificationType, NotificationPriority } from '../types';
 import { offlineStorage } from '../utils/offlineStorage';
 
 const now = new Date();
@@ -278,6 +278,8 @@ interface SyncState {
   isOfflinePanelOpen: boolean;
   isOnline: boolean;
   isManualOfflineMode: boolean;
+  notifications: Notification[];
+  isNotificationCenterOpen: boolean;
   setFiles: (files: SyncFile[]) => void;
   setConflicts: (conflicts: SyncConflict[]) => void;
   resolveConflict: (id: string, resolution: 'local' | 'remote' | 'merge') => void;
@@ -351,6 +353,14 @@ interface SyncState {
   toggleIgnoreRule: (id: string) => void;
   testIgnoreRule: (filePath: string, rulePattern: string, ruleType: IgnoreRule['type']) => boolean;
   checkFileIgnored: (filePath: string) => IgnoreRuleMatchResult;
+  addNotification: (notification: Omit<Notification, 'id' | 'timestamp' | 'read'>) => void;
+  markNotificationAsRead: (id: string) => void;
+  markAllNotificationsAsRead: () => void;
+  removeNotification: (id: string) => void;
+  clearAllNotifications: () => void;
+  toggleNotificationCenter: () => void;
+  openNotificationCenter: () => void;
+  closeNotificationCenter: () => void;
 }
 
 export const useSyncStore = create<SyncState>((set, get) => ({
@@ -371,6 +381,8 @@ export const useSyncStore = create<SyncState>((set, get) => ({
   isOfflinePanelOpen: false,
   isOnline: true,
   isManualOfflineMode: false,
+  notifications: [],
+  isNotificationCenterOpen: false,
   versionHistory: {
     isOpen: false,
     fileId: null,
@@ -397,7 +409,28 @@ export const useSyncStore = create<SyncState>((set, get) => ({
   shareLinksPanelOpen: false,
   shareLinksPanelFileId: null,
   setFiles: (files) => set({ files }),
-  setConflicts: (conflicts) => set({ conflicts }),
+  setConflicts: (conflicts) => {
+    const state = get();
+    const newUnresolvedConflicts = conflicts.filter(
+      c => !c.resolved && !state.conflicts.find(sc => sc.id === c.id)
+    );
+    
+    if (newUnresolvedConflicts.length > 0) {
+      const conflictNames = newUnresolvedConflicts.map(c => c.fileName).join('、');
+      get().addNotification({
+        type: 'sync_conflict',
+        title: `发现 ${newUnresolvedConflicts.length} 个新冲突`,
+        message: `文件 ${conflictNames} 存在同步冲突，需要手动处理`,
+        priority: newUnresolvedConflicts.length > 2 ? 'urgent' : 'high',
+        actions: [
+          { label: '立即处理', type: 'navigate', target: 'conflicts' },
+        ],
+        metadata: { conflictIds: newUnresolvedConflicts.map(c => c.id) },
+      });
+    }
+    
+    set({ conflicts });
+  },
   resolveConflict: (id, resolution) => set((state) => ({
     conflicts: state.conflicts.map(c =>
       c.id === id ? { ...c, resolved: true, resolution, resolvedAt: new Date().toISOString(), resolvedBy: '用户' } : c)
@@ -408,9 +441,58 @@ export const useSyncStore = create<SyncState>((set, get) => ({
   })),
   setCurrentFolder: (path) => set({ currentFolder: path }),
   startSync: () => set({ syncProgress: 0 }),
-  addActivity: (activity) => set((state) => ({
-    activities: [activity, ...state.activities].slice(0, 100)
-  })),
+  addActivity: (activity) => {
+    set((state) => ({
+      activities: [activity, ...state.activities].slice(0, 100)
+    }));
+
+    const getNotificationForActivity = () => {
+      switch (activity.status) {
+        case 'success':
+          return {
+            type: 'sync_success' as const,
+            title: '同步成功',
+            message: `文件 "${activity.fileName}" 已成功${activity.action === 'upload' ? '上传' : activity.action === 'download' ? '下载' : activity.action === 'delete' ? '删除' : '同步'}`,
+            priority: 'low' as const,
+            actions: [
+              { label: '查看详情', type: 'navigate' as const, target: 'activity' },
+            ],
+            metadata: { activityId: activity.id, fileId: activity.fileId },
+          };
+        case 'failed':
+          return {
+            type: 'sync_failed' as const,
+            title: '同步失败',
+            message: `文件 "${activity.fileName}" 同步失败${activity.errorMessage ? `: ${activity.errorMessage}` : ''}`,
+            priority: 'high' as const,
+            actions: [
+              { label: '查看详情', type: 'navigate' as const, target: 'activity' },
+              { label: '查看传输', type: 'navigate' as const, target: 'largetransfers' },
+            ],
+            metadata: { activityId: activity.id, fileId: activity.fileId },
+          };
+        case 'conflict':
+          return {
+            type: 'sync_conflict' as const,
+            title: '同步冲突',
+            message: `文件 "${activity.fileName}" 存在同步冲突，需要手动处理`,
+            priority: 'urgent' as const,
+            actions: [
+              { label: '立即处理', type: 'navigate' as const, target: 'conflicts' },
+              { label: '稍后处理', type: 'callback' as const },
+            ],
+            metadata: { activityId: activity.id, fileId: activity.fileId },
+          };
+        default:
+          return null;
+      }
+    };
+
+    const notification = getNotificationForActivity();
+    if (notification) {
+      get().addNotification(notification);
+    }
+  },
   setActivities: (activities) => set({ activities }),
   openVersionHistory: (fileId) => set({
     versionHistory: {
@@ -554,6 +636,21 @@ export const useSyncStore = create<SyncState>((set, get) => ({
     const data = get().onboardingWizardData;
     const availableSpace = data.storageTotal - data.storageUsed;
     const valid = availableSpace >= requiredSpace;
+    
+    if (!valid) {
+      get().addNotification({
+        type: 'storage_insufficient',
+        title: '存储空间不足',
+        message: `需要 ${(requiredSpace / 1024 / 1024 / 1024).toFixed(1)} GB 空间，当前仅可用 ${(availableSpace / 1024 / 1024 / 1024).toFixed(1)} GB`,
+        priority: 'urgent',
+        actions: [
+          { label: '查看空间分析', type: 'navigate', target: 'storage' },
+          { label: '清理存储空间', type: 'navigate', target: 'recyclebin' },
+        ],
+        metadata: { requiredSpace, availableSpace },
+      });
+    }
+    
     return {
       valid,
       availableSpace,
@@ -1041,4 +1138,40 @@ export const useSyncStore = create<SyncState>((set, get) => ({
     }
     return { filePath, matched: false };
   },
+
+  addNotification: (notification) => {
+    const newNotification: Notification = {
+      ...notification,
+      id: `notif-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      timestamp: new Date().toISOString(),
+      read: false,
+    };
+    set((state) => ({
+      notifications: [newNotification, ...state.notifications].slice(0, 100),
+    }));
+  },
+
+  markNotificationAsRead: (id) => set((state) => ({
+    notifications: state.notifications.map(n =>
+      n.id === id ? { ...n, read: true } : n
+    ),
+  })),
+
+  markAllNotificationsAsRead: () => set((state) => ({
+    notifications: state.notifications.map(n => ({ ...n, read: true })),
+  })),
+
+  removeNotification: (id) => set((state) => ({
+    notifications: state.notifications.filter(n => n.id !== id),
+  })),
+
+  clearAllNotifications: () => set({ notifications: [] }),
+
+  toggleNotificationCenter: () => set((state) => ({
+    isNotificationCenterOpen: !state.isNotificationCenterOpen,
+  })),
+
+  openNotificationCenter: () => set({ isNotificationCenterOpen: true }),
+
+  closeNotificationCenter: () => set({ isNotificationCenterOpen: false }),
 }));

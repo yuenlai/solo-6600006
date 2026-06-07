@@ -339,3 +339,26 @@ export interface DeviceHealthMetrics {
   connectionQualityScore: number;
   lastSyncTime: string;
 }
+
+export type NotificationType = 'sync_success' | 'sync_failed' | 'sync_conflict' | 'storage_insufficient' | 'system';
+
+export type NotificationPriority = 'low' | 'normal' | 'high' | 'urgent';
+
+export interface NotificationAction {
+  label: string;
+  type: 'navigate' | 'callback';
+  target?: string;
+  callback?: () => void;
+}
+
+export interface Notification {
+  id: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  timestamp: string;
+  read: boolean;
+  priority: NotificationPriority;
+  actions?: NotificationAction[];
+  metadata?: Record<string, any>;
+}
