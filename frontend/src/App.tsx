@@ -11,6 +11,7 @@ import { ShareLinksPanel } from './components/ShareLinksPanel';
 import { ShareAccessPage } from './components/ShareAccessPage';
 import { LargeFileTransferPanel } from './components/LargeFileTransferPanel';
 import { ConflictResolutionCenter } from './components/ConflictResolutionCenter';
+import { StorageAnalysisPanel } from './components/StorageAnalysisPanel';
 import { useSyncStore } from './store/sync';
 import { SyncFile, Device, SyncActivity, FileVersion, RecycleBinItem, SyncSchedule, LargeFileTransferItem } from './types';
 
@@ -224,7 +225,7 @@ const getShareTokenFromPath = (): string | null => {
 };
 
 const App: React.FC = () => {
-  const [tab, setTab] = useState<'activity' | 'files' | 'devices' | 'conflicts' | 'recyclebin' | 'schedule' | 'largetransfers'>('activity');
+  const [tab, setTab] = useState<'activity' | 'files' | 'devices' | 'conflicts' | 'recyclebin' | 'schedule' | 'largetransfers' | 'storage'>('activity');
   const [shareToken, setShareToken] = useState<string | null>(getShareTokenFromPath());
   
   const conflicts = useSyncStore(state => state.conflicts);
@@ -241,6 +242,7 @@ const App: React.FC = () => {
   const shareLinksPanelOpen = useSyncStore(state => state.shareLinksPanelOpen);
   const shareLinksPanelFileId = useSyncStore(state => state.shareLinksPanelFileId);
   const largeFileTransfers = useSyncStore(state => state.largeFileTransfers);
+  const storageAnalysis = useSyncStore(state => state.storageAnalysis);
   
   const setFiles = useSyncStore(state => state.setFiles);
   const setActivities = useSyncStore(state => state.setActivities);
@@ -423,6 +425,7 @@ const App: React.FC = () => {
             onCancel={cancelLargeFileTransfer}
           />
         )}
+        {tab === 'storage' && <StorageAnalysisPanel data={storageAnalysis} />}
       </>
     );
   };
@@ -435,6 +438,7 @@ const App: React.FC = () => {
           { key: 'activity', label: '同步动态' },
           { key: 'largetransfers', label: '大文件传输' },
           { key: 'schedule', label: '定时同步' },
+          { key: 'storage', label: '空间分析' },
           { key: 'files', label: '文件列表' },
           { key: 'devices', label: '设备管理' },
           { key: 'conflicts', label: '冲突处理' },

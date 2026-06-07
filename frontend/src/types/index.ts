@@ -202,3 +202,41 @@ export interface LargeFileTransferItem {
   retryCount: number;
   maxRetries: number;
 }
+
+export interface DirectoryStorageItem {
+  path: string;
+  name: string;
+  size: number;
+  fileCount: number;
+  subdirectories: number;
+  lastModified: string;
+}
+
+export interface FileTypeStorageItem {
+  extension: string;
+  category: string;
+  size: number;
+  fileCount: number;
+  color: string;
+}
+
+export interface DeviceStorageItem {
+  deviceId: string;
+  deviceName: string;
+  platform: string;
+  storageUsed: number;
+  storageTotal: number;
+  fileCount: number;
+  lastSync: string;
+  status: 'online' | 'offline';
+}
+
+export interface StorageAnalysisData {
+  totalStorageUsed: number;
+  totalFiles: number;
+  byDirectory: DirectoryStorageItem[];
+  byFileType: FileTypeStorageItem[];
+  byDevice: DeviceStorageItem[];
+}
+
+export type StorageViewMode = 'directory' | 'filetype' | 'device';

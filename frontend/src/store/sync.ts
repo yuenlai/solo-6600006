@@ -1,7 +1,35 @@
 import { create } from 'zustand';
-import { SyncFile, SyncFolder, Device, SyncConflict, SyncActivity, FileVersion, RecycleBinItem, RestoreResult, DeviceWizardData, SpaceValidationResult, SyncSchedule, ScheduleExecution, ShareLink, LargeFileTransferItem } from '../types';
+import { SyncFile, SyncFolder, Device, SyncConflict, SyncActivity, FileVersion, RecycleBinItem, RestoreResult, DeviceWizardData, SpaceValidationResult, SyncSchedule, ScheduleExecution, ShareLink, LargeFileTransferItem, StorageAnalysisData } from '../types';
 
 const now = new Date();
+
+const mockStorageAnalysis: StorageAnalysisData = {
+  totalStorageUsed: 53687091200,
+  totalFiles: 1247,
+  byDirectory: [
+    { path: '/videos', name: 'videos', size: 21474836480, fileCount: 156, subdirectories: 8, lastModified: '2026-06-06T10:30:00Z' },
+    { path: '/photos', name: 'photos', size: 16106127360, fileCount: 892, subdirectories: 12, lastModified: '2026-06-05T15:20:00Z' },
+    { path: '/backup', name: 'backup', size: 8589934592, fileCount: 23, subdirectories: 3, lastModified: '2026-06-04T08:00:00Z' },
+    { path: '/docs', name: 'docs', size: 4294967296, fileCount: 128, subdirectories: 6, lastModified: '2026-06-06T11:00:00Z' },
+    { path: '/data', name: 'data', size: 2147483648, fileCount: 35, subdirectories: 2, lastModified: '2026-06-03T14:30:00Z' },
+    { path: '/design', name: 'design', size: 1073741824, fileCount: 13, subdirectories: 1, lastModified: '2026-06-02T09:15:00Z' },
+  ],
+  byFileType: [
+    { extension: '.mp4', category: '视频文件', size: 19327352832, fileCount: 128, color: '#e53935' },
+    { extension: '.jpg', category: '图片文件', size: 13958643712, fileCount: 756, color: '#1e88e5' },
+    { extension: '.zip', category: '压缩文件', size: 8589934592, fileCount: 18, color: '#fdd835' },
+    { extension: '.pdf', category: '文档文件', size: 3221225472, fileCount: 89, color: '#43a047' },
+    { extension: '.psd', category: '设计文件', size: 4294967296, fileCount: 12, color: '#8e24aa' },
+    { extension: '.csv', category: '数据文件', size: 1073741824, fileCount: 28, color: '#fb8c00' },
+    { extension: '.docx', category: 'Word文档', size: 1073741824, fileCount: 45, color: '#00897b' },
+    { extension: '.其他', category: '其他文件', size: 2147483648, fileCount: 171, color: '#757575' },
+  ],
+  byDevice: [
+    { deviceId: 'd1', deviceName: 'MacBook Pro', platform: 'mac', storageUsed: 5368709120, storageTotal: 107374182400, fileCount: 892, lastSync: '2026-06-06T12:00:00Z', status: 'online' },
+    { deviceId: 'd2', deviceName: 'Ubuntu Server', platform: 'linux', storageUsed: 10737418240, storageTotal: 53687091200, fileCount: 456, lastSync: '2026-06-06T11:00:00Z', status: 'online' },
+    { deviceId: 'd3', deviceName: 'Windows Desktop', platform: 'windows', storageUsed: 2147483648, storageTotal: 107374182400, fileCount: 234, lastSync: '2026-06-05T20:00:00Z', status: 'offline' },
+  ],
+};
 
 const mockConflicts: SyncConflict[] = [
   {
@@ -146,6 +174,7 @@ interface SyncState {
   shareLinksPanelOpen: boolean;
   shareLinksPanelFileId: string | null;
   largeFileTransfers: LargeFileTransferItem[];
+  storageAnalysis: StorageAnalysisData;
   setFiles: (files: SyncFile[]) => void;
   setConflicts: (conflicts: SyncConflict[]) => void;
   resolveConflict: (id: string, resolution: 'local' | 'remote' | 'merge') => void;
@@ -192,6 +221,7 @@ interface SyncState {
   resumeLargeFileTransfer: (id: string) => void;
   retryLargeFileTransfer: (id: string) => void;
   cancelLargeFileTransfer: (id: string) => void;
+  setStorageAnalysis: (data: StorageAnalysisData) => void;
 }
 
 export const useSyncStore = create<SyncState>((set, get) => ({
@@ -199,6 +229,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
   recycleBin: [],
   currentFolder: '/', syncProgress: 0,
   largeFileTransfers: [],
+  storageAnalysis: mockStorageAnalysis,
   versionHistory: {
     isOpen: false,
     fileId: null,
@@ -527,4 +558,5 @@ export const useSyncStore = create<SyncState>((set, get) => ({
   cancelLargeFileTransfer: (id) => set((state) => ({
     largeFileTransfers: state.largeFileTransfers.filter(t => t.id !== id),
   })),
+  setStorageAnalysis: (data) => set({ storageAnalysis: data }),
 }));
