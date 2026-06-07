@@ -54,3 +54,25 @@ export interface SyncActivity {
   device?: string;
   size?: number;
 }
+
+export interface RecycleBinItem {
+  id: string;
+  fileId: string;
+  fileName: string;
+  filePath: string;
+  size: number;
+  hash: string;
+  deletedAt: string;
+  deletedBy: string;
+  deletedFrom: string;
+  expiresAt: string;
+  restored: boolean;
+  restoredAt?: string;
+  restoredTo?: string;
+}
+
+export interface RestoreResult {
+  success: boolean;
+  message: string;
+  item?: RecycleBinItem;
+}

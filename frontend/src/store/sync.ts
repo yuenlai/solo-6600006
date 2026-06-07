@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { SyncFile, SyncFolder, Device, SyncConflict, SyncActivity, FileVersion } from '../types';
+import { SyncFile, SyncFolder, Device, SyncConflict, SyncActivity, FileVersion, RecycleBinItem, RestoreResult } from '../types';
 
 interface VersionHistoryViewState {
   isOpen: boolean;
@@ -11,6 +11,7 @@ interface VersionHistoryViewState {
 interface SyncState {
   files: SyncFile[]; folders: SyncFolder[]; devices: Device[];
   conflicts: SyncConflict[]; activities: SyncActivity[];
+  recycleBin: RecycleBinItem[];
   currentFolder: string; syncProgress: number;
   versionHistory: VersionHistoryViewState;
   setFiles: (files: SyncFile[]) => void;
@@ -24,10 +25,16 @@ interface SyncState {
   selectVersionsForCompare: (oldVersionId: string, newVersionId: string) => void;
   closeCompare: () => void;
   restoreVersion: (fileId: string, version: FileVersion) => void;
+  setRecycleBin: (items: RecycleBinItem[]) => void;
+  addToRecycleBin: (item: RecycleBinItem) => void;
+  restoreFromRecycleBin: (itemId: string) => RestoreResult;
+  deleteFromRecycleBin: (itemId: string) => void;
+  clearExpiredRecycleBin: () => void;
 }
 
-export const useSyncStore = create<SyncState>((set) => ({
+export const useSyncStore = create<SyncState>((set, get) => ({
   files: [], folders: [], devices: [], conflicts: [], activities: [],
+  recycleBin: [],
   currentFolder: '/', syncProgress: 0,
   versionHistory: {
     isOpen: false,
@@ -77,7 +84,7 @@ export const useSyncStore = create<SyncState>((set) => ({
     }
   })),
   restoreVersion: (fileId, version) => {
-    const state = useSyncStore.getState();
+    const state = get();
     const file = state.files.find(f => f.id === fileId);
     if (file) {
       const activity: SyncActivity = {
@@ -91,7 +98,7 @@ export const useSyncStore = create<SyncState>((set) => ({
         device: version.device,
         size: version.size,
       };
-      useSyncStore.getState().addActivity(activity);
+      get().addActivity(activity);
     }
     set((state) => ({
       versionHistory: {
@@ -101,6 +108,61 @@ export const useSyncStore = create<SyncState>((set) => ({
         selectedVersionIds: null,
         showCompare: false,
       }
+    }));
+  },
+  setRecycleBin: (items) => set({ recycleBin: items }),
+  addToRecycleBin: (item) => set((state) => ({
+    recycleBin: [item, ...state.recycleBin]
+  })),
+  restoreFromRecycleBin: (itemId) => {
+    const state = get();
+    const item = state.recycleBin.find(i => i.id === itemId);
+    if (!item) {
+      return { success: false, message: '文件不存在于回收站中' };
+    }
+    if (item.restored) {
+      return { success: false, message: '该文件已被恢复' };
+    }
+    const now = new Date();
+    const expiresAt = new Date(item.expiresAt);
+    if (now > expiresAt) {
+      return { success: false, message: '文件已超过保留期限，无法恢复' };
+    }
+    const updatedItem: RecycleBinItem = {
+      ...item,
+      restored: true,
+      restoredAt: now.toISOString(),
+      restoredTo: item.filePath,
+    };
+    set((state) => ({
+      recycleBin: state.recycleBin.map(i => 
+        i.id === itemId ? updatedItem : i
+      ),
+    }));
+    const activity: SyncActivity = {
+      id: `act-${Date.now()}`,
+      fileId: item.fileId,
+      fileName: item.fileName,
+      filePath: item.filePath,
+      status: 'success',
+      action: 'upload',
+      timestamp: now.toISOString(),
+      device: item.deletedFrom,
+      size: item.size,
+    };
+    get().addActivity(activity);
+    return { success: true, message: `文件已恢复到: ${item.filePath}`, item: updatedItem };
+  },
+  deleteFromRecycleBin: (itemId) => set((state) => ({
+    recycleBin: state.recycleBin.filter(i => i.id !== itemId)
+  })),
+  clearExpiredRecycleBin: () => {
+    const now = new Date();
+    set((state) => ({
+      recycleBin: state.recycleBin.filter(item => {
+        const expiresAt = new Date(item.expiresAt);
+        return now <= expiresAt && !item.restored;
+      })
     }));
   },
 }));

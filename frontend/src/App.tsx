@@ -4,8 +4,9 @@ import { DevicePanel } from './components/DevicePanel';
 import { SyncActivityPanel } from './components/SyncActivityPanel';
 import { VersionHistoryPanel } from './components/VersionHistoryPanel';
 import { VersionComparePanel } from './components/VersionComparePanel';
+import { RecycleBinPanel } from './components/RecycleBinPanel';
 import { useSyncStore } from './store/sync';
-import { SyncFile, Device, SyncActivity, FileVersion } from './types';
+import { SyncFile, Device, SyncActivity, FileVersion, RecycleBinItem } from './types';
 
 const now = new Date();
 
@@ -43,14 +44,76 @@ const mockActivities: SyncActivity[] = [
   { id: 'a8', fileId: '9', fileName: 'image.png', filePath: '/images/image.png', status: 'failed', action: 'download', timestamp: new Date(now.getTime() - 24 * 3600000).toISOString(), device: 'Windows Desktop', size: 2097152, errorMessage: '文件已被删除' },
 ];
 
+const mockRecycleBin: RecycleBinItem[] = [
+  {
+    id: 'rb1',
+    fileId: 'f1',
+    fileName: 'project_draft.docx',
+    filePath: '/docs/project_draft.docx',
+    size: 102400,
+    hash: 'abc123def456',
+    deletedAt: new Date(now.getTime() - 2 * 3600000).toISOString(),
+    deletedBy: '张三',
+    deletedFrom: 'MacBook Pro',
+    expiresAt: new Date(now.getTime() + 28 * 86400000).toISOString(),
+    restored: false,
+  },
+  {
+    id: 'rb2',
+    fileId: 'f2',
+    fileName: 'old_photo.jpg',
+    filePath: '/photos/old_photo.jpg',
+    size: 2097152,
+    hash: 'def456ghi789',
+    deletedAt: new Date(now.getTime() - 24 * 3600000).toISOString(),
+    deletedBy: '李四',
+    deletedFrom: 'Windows Desktop',
+    expiresAt: new Date(now.getTime() + 29 * 86400000).toISOString(),
+    restored: false,
+  },
+  {
+    id: 'rb3',
+    fileId: 'f3',
+    fileName: 'backup_2026.zip',
+    filePath: '/backup/backup_2026.zip',
+    size: 104857600,
+    hash: 'ghi789jkl012',
+    deletedAt: new Date(now.getTime() - 3 * 86400000).toISOString(),
+    deletedBy: '王五',
+    deletedFrom: 'Ubuntu Server',
+    expiresAt: new Date(now.getTime() + 27 * 86400000).toISOString(),
+    restored: true,
+    restoredAt: new Date(now.getTime() - 1 * 86400000).toISOString(),
+    restoredTo: '/backup/backup_2026_restored.zip',
+  },
+  {
+    id: 'rb4',
+    fileId: 'f4',
+    fileName: 'temp_notes.txt',
+    filePath: '/temp/temp_notes.txt',
+    size: 4096,
+    hash: 'jkl012mno345',
+    deletedAt: new Date(now.getTime() - 31 * 86400000).toISOString(),
+    deletedBy: '张三',
+    deletedFrom: 'MacBook Pro',
+    expiresAt: new Date(now.getTime() - 1 * 86400000).toISOString(),
+    restored: false,
+  },
+];
+
 const App: React.FC = () => {
-  const [tab, setTab] = useState<'activity' | 'files' | 'devices' | 'conflicts'>('activity');
+  const [tab, setTab] = useState<'activity' | 'files' | 'devices' | 'conflicts' | 'recyclebin'>('activity');
   const {
     files,
     activities,
+    recycleBin,
     versionHistory,
     setFiles,
     setActivities,
+    setRecycleBin,
+    restoreFromRecycleBin,
+    deleteFromRecycleBin,
+    clearExpiredRecycleBin,
     openVersionHistory,
     closeVersionHistory,
     selectVersionsForCompare,
@@ -61,10 +124,12 @@ const App: React.FC = () => {
   useEffect(() => {
     setFiles(mockFiles);
     setActivities(mockActivities);
-  }, [setFiles, setActivities]);
+    setRecycleBin(mockRecycleBin);
+  }, [setFiles, setActivities, setRecycleBin]);
 
   const displayFiles = files.length > 0 ? files : mockFiles;
   const displayActivities = activities.length > 0 ? activities : mockActivities;
+  const displayRecycleBin = recycleBin.length > 0 ? recycleBin : mockRecycleBin;
 
   const selectedFile = versionHistory.fileId ? displayFiles.find(f => f.id === versionHistory.fileId) : null;
   const selectedVersions = versionHistory.selectedVersionIds && selectedFile
@@ -109,6 +174,14 @@ const App: React.FC = () => {
         )}
         {tab === 'devices' && <DevicePanel devices={mockDevices} />}
         {tab === 'conflicts' && <div style={{ padding: '16px' }}><h3>Conflicts</h3><p style={{ color: '#999' }}>No conflicts</p></div>}
+        {tab === 'recyclebin' && (
+          <RecycleBinPanel
+            items={displayRecycleBin}
+            onRestore={restoreFromRecycleBin}
+            onDeletePermanently={deleteFromRecycleBin}
+            onClearExpired={clearExpiredRecycleBin}
+          />
+        )}
       </>
     );
   };
@@ -121,7 +194,8 @@ const App: React.FC = () => {
           { key: 'activity', label: '同步动态' },
           { key: 'files', label: 'Files' },
           { key: 'devices', label: 'Devices' },
-          { key: 'conflicts', label: 'Conflicts' }
+          { key: 'conflicts', label: 'Conflicts' },
+          { key: 'recyclebin', label: '回收站' }
         ].map(t => (
           <button key={t.key} onClick={() => {
             setTab(t.key as any);
