@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { SyncFile, SyncFolder, Device, SyncConflict, SyncActivity, FileVersion, RecycleBinItem, RestoreResult, DeviceWizardData, SpaceValidationResult, SyncSchedule, ScheduleExecution, ShareLink, LargeFileTransferItem, StorageAnalysisData, OfflineChange, SyncProgress, DirectorySnapshot, RestoreSnapshotResult, SnapshotFileItem, IgnoreRule, IgnoreRuleMatchResult, Notification, NotificationType, NotificationPriority } from '../types';
+import { SyncFile, SyncFolder, Device, SyncConflict, SyncActivity, FileVersion, RecycleBinItem, RestoreResult, DeviceWizardData, SpaceValidationResult, SyncSchedule, ScheduleExecution, ShareLink, LargeFileTransferItem, StorageAnalysisData, OfflineChange, SyncProgress, DirectorySnapshot, RestoreSnapshotResult, SnapshotFileItem, IgnoreRule, IgnoreRuleMatchResult, Notification, Workspace, WorkspaceMember, WorkspaceFileActivity, WorkspaceRole } from '../types';
 import { offlineStorage } from '../utils/offlineStorage';
 
 const now = new Date();
@@ -128,6 +128,68 @@ const mockStorageAnalysis: StorageAnalysisData = {
     { deviceId: 'd3', deviceName: 'Windows Desktop', platform: 'windows', storageUsed: 2147483648, storageTotal: 107374182400, fileCount: 234, lastSync: '2026-06-05T20:00:00Z', status: 'offline' },
   ],
 };
+
+const mockMembers: WorkspaceMember[] = [
+  { id: 'm1', name: '张三', email: 'zhangsan@example.com', role: 'owner', joinedAt: new Date(now.getTime() - 30 * 86400000).toISOString(), lastActive: new Date(now.getTime() - 5 * 60000).toISOString(), status: 'online' },
+  { id: 'm2', name: '李四', email: 'lisi@example.com', role: 'admin', joinedAt: new Date(now.getTime() - 25 * 86400000).toISOString(), lastActive: new Date(now.getTime() - 15 * 60000).toISOString(), status: 'online' },
+  { id: 'm3', name: '王五', email: 'wangwu@example.com', role: 'editor', joinedAt: new Date(now.getTime() - 20 * 86400000).toISOString(), lastActive: new Date(now.getTime() - 2 * 3600000).toISOString(), status: 'away' },
+  { id: 'm4', name: '赵六', email: 'zhaoliu@example.com', role: 'viewer', joinedAt: new Date(now.getTime() - 10 * 86400000).toISOString(), lastActive: new Date(now.getTime() - 24 * 3600000).toISOString(), status: 'offline' },
+];
+
+const mockWorkspaceActivities: WorkspaceFileActivity[] = [
+  { id: 'wa1', workspaceId: 'ws1', fileId: 'f1', fileName: '项目方案v2.docx', filePath: '/docs/项目方案v2.docx', action: 'modify', memberId: 'm2', memberName: '李四', timestamp: new Date(now.getTime() - 5 * 60000).toISOString(), size: 512000, device: 'Windows Desktop' },
+  { id: 'wa2', workspaceId: 'ws1', fileId: 'f2', fileName: '设计稿首页.psd', filePath: '/design/设计稿首页.psd', action: 'upload', memberId: 'm1', memberName: '张三', timestamp: new Date(now.getTime() - 30 * 60000).toISOString(), size: 104857600, device: 'MacBook Pro' },
+  { id: 'wa3', workspaceId: 'ws1', fileId: 'f3', fileName: '数据报表.xlsx', filePath: '/data/数据报表.xlsx', action: 'download', memberId: 'm3', memberName: '王五', timestamp: new Date(now.getTime() - 2 * 3600000).toISOString(), size: 2048000, device: 'Ubuntu Server' },
+  { id: 'wa4', workspaceId: 'ws1', fileId: 'f4', fileName: '旧版本方案.docx', filePath: '/archive/旧版本方案.docx', action: 'delete', memberId: 'm1', memberName: '张三', timestamp: new Date(now.getTime() - 5 * 3600000).toISOString(), device: 'MacBook Pro' },
+  { id: 'wa5', workspaceId: 'ws1', fileId: 'f5', fileName: '会议纪要.md', filePath: '/docs/会议纪要.md', action: 'share', memberId: 'm2', memberName: '李四', timestamp: new Date(now.getTime() - 8 * 3600000).toISOString(), size: 10240, device: 'Windows Desktop' },
+  { id: 'wa6', workspaceId: 'ws2', fileId: 'f6', fileName: '产品需求文档.pdf', filePath: '/product/PRD.pdf', action: 'upload', memberId: 'm1', memberName: '张三', timestamp: new Date(now.getTime() - 1 * 3600000).toISOString(), size: 3145728, device: 'MacBook Pro' },
+  { id: 'wa7', workspaceId: 'ws2', fileId: 'f7', fileName: '用户调研数据.csv', filePath: '/data/用户调研数据.csv', action: 'modify', memberId: 'm3', memberName: '王五', timestamp: new Date(now.getTime() - 4 * 3600000).toISOString(), size: 5242880, device: 'Ubuntu Server' },
+];
+
+const mockWorkspaces: Workspace[] = [
+  {
+    id: 'ws1',
+    name: '产品研发团队',
+    description: '产品设计与研发协作空间',
+    ownerId: 'm1',
+    ownerName: '张三',
+    members: mockMembers,
+    fileCount: 156,
+    storageUsed: 10737418240,
+    createdAt: new Date(now.getTime() - 30 * 86400000).toISOString(),
+    updatedAt: new Date(now.getTime() - 5 * 60000).toISOString(),
+    recentActivities: mockWorkspaceActivities.filter(a => a.workspaceId === 'ws1'),
+    color: '#1976d2',
+  },
+  {
+    id: 'ws2',
+    name: '市场营销组',
+    description: '市场推广和营销活动策划',
+    ownerId: 'm2',
+    ownerName: '李四',
+    members: [mockMembers[0], mockMembers[1], mockMembers[3]],
+    fileCount: 89,
+    storageUsed: 5368709120,
+    createdAt: new Date(now.getTime() - 20 * 86400000).toISOString(),
+    updatedAt: new Date(now.getTime() - 1 * 3600000).toISOString(),
+    recentActivities: mockWorkspaceActivities.filter(a => a.workspaceId === 'ws2'),
+    color: '#388e3c',
+  },
+  {
+    id: 'ws3',
+    name: '个人工作区',
+    description: '我的私人工作空间',
+    ownerId: 'm1',
+    ownerName: '张三',
+    members: [mockMembers[0]],
+    fileCount: 42,
+    storageUsed: 2147483648,
+    createdAt: new Date(now.getTime() - 60 * 86400000).toISOString(),
+    updatedAt: new Date(now.getTime() - 12 * 3600000).toISOString(),
+    recentActivities: [],
+    color: '#f57c00',
+  },
+];
 
 const mockConflicts: SyncConflict[] = [
   {
@@ -280,6 +342,10 @@ interface SyncState {
   isManualOfflineMode: boolean;
   notifications: Notification[];
   isNotificationCenterOpen: boolean;
+  workspaces: Workspace[];
+  selectedWorkspaceId: string | null;
+  isCreateWorkspaceModalOpen: boolean;
+  workspaceActivities: WorkspaceFileActivity[];
   setFiles: (files: SyncFile[]) => void;
   setConflicts: (conflicts: SyncConflict[]) => void;
   resolveConflict: (id: string, resolution: 'local' | 'remote' | 'merge') => void;
@@ -361,6 +427,17 @@ interface SyncState {
   toggleNotificationCenter: () => void;
   openNotificationCenter: () => void;
   closeNotificationCenter: () => void;
+  setWorkspaces: (workspaces: Workspace[]) => void;
+  createWorkspace: (name: string, description?: string, color?: string) => Workspace;
+  deleteWorkspace: (workspaceId: string) => void;
+  updateWorkspace: (workspaceId: string, updates: Partial<Workspace>) => void;
+  selectWorkspace: (workspaceId: string | null) => void;
+  addWorkspaceMember: (workspaceId: string, member: Omit<WorkspaceMember, 'id' | 'joinedAt' | 'lastActive' | 'status'>) => void;
+  removeWorkspaceMember: (workspaceId: string, memberId: string) => void;
+  updateMemberRole: (workspaceId: string, memberId: string, role: WorkspaceRole) => void;
+  addWorkspaceActivity: (workspaceId: string, activity: Omit<WorkspaceFileActivity, 'id' | 'timestamp'>) => void;
+  openCreateWorkspaceModal: () => void;
+  closeCreateWorkspaceModal: () => void;
 }
 
 export const useSyncStore = create<SyncState>((set, get) => ({
@@ -383,6 +460,10 @@ export const useSyncStore = create<SyncState>((set, get) => ({
   isManualOfflineMode: false,
   notifications: [],
   isNotificationCenterOpen: false,
+  workspaces: [...mockWorkspaces],
+  selectedWorkspaceId: null,
+  isCreateWorkspaceModalOpen: false,
+  workspaceActivities: [...mockWorkspaceActivities],
   versionHistory: {
     isOpen: false,
     fileId: null,
@@ -1174,4 +1255,125 @@ export const useSyncStore = create<SyncState>((set, get) => ({
   openNotificationCenter: () => set({ isNotificationCenterOpen: true }),
 
   closeNotificationCenter: () => set({ isNotificationCenterOpen: false }),
+
+  setWorkspaces: (workspaces) => set({ workspaces }),
+
+  createWorkspace: (name, description, color) => {
+    const colors = ['#1976d2', '#388e3c', '#f57c00', '#7b1fa2', '#c2185b', '#00838f'];
+    const newWorkspace: Workspace = {
+      id: `ws-${Date.now()}`,
+      name,
+      description,
+      ownerId: 'm1',
+      ownerName: '张三',
+      members: [
+        {
+          id: 'm1',
+          name: '张三',
+          email: 'zhangsan@example.com',
+          role: 'owner',
+          joinedAt: new Date().toISOString(),
+          lastActive: new Date().toISOString(),
+          status: 'online',
+        },
+      ],
+      fileCount: 0,
+      storageUsed: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      recentActivities: [],
+      color: color || colors[Math.floor(Math.random() * colors.length)],
+    };
+    set((state) => ({
+      workspaces: [newWorkspace, ...state.workspaces],
+      isCreateWorkspaceModalOpen: false,
+    }));
+    get().addNotification({
+      type: 'system',
+      title: '工作区创建成功',
+      message: `工作区 "${name}" 已成功创建`,
+      priority: 'low',
+    });
+    return newWorkspace;
+  },
+
+  deleteWorkspace: (workspaceId) => set((state) => ({
+    workspaces: state.workspaces.filter((w) => w.id !== workspaceId),
+    selectedWorkspaceId: state.selectedWorkspaceId === workspaceId ? null : state.selectedWorkspaceId,
+  })),
+
+  updateWorkspace: (workspaceId, updates) => set((state) => ({
+    workspaces: state.workspaces.map((w) =>
+      w.id === workspaceId ? { ...w, ...updates, updatedAt: new Date().toISOString() } : w
+    ),
+  })),
+
+  selectWorkspace: (workspaceId) => set({ selectedWorkspaceId: workspaceId }),
+
+  addWorkspaceMember: (workspaceId, member) => {
+    const newMember: WorkspaceMember = {
+      ...member,
+      id: `m-${Date.now()}`,
+      joinedAt: new Date().toISOString(),
+      lastActive: new Date().toISOString(),
+      status: 'offline',
+    };
+    set((state) => ({
+      workspaces: state.workspaces.map((w) =>
+        w.id === workspaceId
+          ? { ...w, members: [...w.members, newMember], updatedAt: new Date().toISOString() }
+          : w
+      ),
+    }));
+    get().addNotification({
+      type: 'system',
+      title: '成员添加成功',
+      message: `${member.name} 已被添加到工作区`,
+      priority: 'low',
+    });
+  },
+
+  removeWorkspaceMember: (workspaceId, memberId) => set((state) => ({
+    workspaces: state.workspaces.map((w) =>
+      w.id === workspaceId
+        ? { ...w, members: w.members.filter((m) => m.id !== memberId), updatedAt: new Date().toISOString() }
+        : w
+    ),
+  })),
+
+  updateMemberRole: (workspaceId, memberId, role) => set((state) => ({
+    workspaces: state.workspaces.map((w) =>
+      w.id === workspaceId
+        ? {
+            ...w,
+            members: w.members.map((m) => (m.id === memberId ? { ...m, role } : m)),
+            updatedAt: new Date().toISOString(),
+          }
+        : w
+    ),
+  })),
+
+  addWorkspaceActivity: (workspaceId, activity) => {
+    const newActivity: WorkspaceFileActivity = {
+      ...activity,
+      id: `wa-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+    };
+    set((state) => ({
+      workspaceActivities: [newActivity, ...state.workspaceActivities],
+      workspaces: state.workspaces.map((w) =>
+        w.id === workspaceId
+          ? {
+              ...w,
+              recentActivities: [newActivity, ...w.recentActivities].slice(0, 20),
+              updatedAt: new Date().toISOString(),
+            }
+          : w
+      ),
+    }));
+  },
+
+  openCreateWorkspaceModal: () => set({ isCreateWorkspaceModalOpen: true }),
+
+  closeCreateWorkspaceModal: () => set({ isCreateWorkspaceModalOpen: false }),
 }));

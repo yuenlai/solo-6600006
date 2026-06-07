@@ -362,3 +362,46 @@ export interface Notification {
   actions?: NotificationAction[];
   metadata?: Record<string, any>;
 }
+
+export interface WorkspaceMember {
+  id: string;
+  name: string;
+  email: string;
+  avatar?: string;
+  role: 'owner' | 'admin' | 'editor' | 'viewer';
+  joinedAt: string;
+  lastActive: string;
+  status: 'online' | 'offline' | 'away';
+}
+
+export interface WorkspaceFileActivity {
+  id: string;
+  workspaceId: string;
+  fileId: string;
+  fileName: string;
+  filePath: string;
+  action: 'upload' | 'download' | 'delete' | 'modify' | 'rename' | 'share';
+  memberId: string;
+  memberName: string;
+  memberAvatar?: string;
+  timestamp: string;
+  size?: number;
+  device?: string;
+}
+
+export interface Workspace {
+  id: string;
+  name: string;
+  description?: string;
+  ownerId: string;
+  ownerName: string;
+  members: WorkspaceMember[];
+  fileCount: number;
+  storageUsed: number;
+  createdAt: string;
+  updatedAt: string;
+  recentActivities: WorkspaceFileActivity[];
+  color: string;
+}
+
+export type WorkspaceRole = 'owner' | 'admin' | 'editor' | 'viewer';

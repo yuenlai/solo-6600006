@@ -17,6 +17,7 @@ import { DirectorySnapshotPanel } from './components/DirectorySnapshotPanel';
 import { IgnoreRulesPanel } from './components/IgnoreRulesPanel';
 import { DeviceHealthPanel } from './components/DeviceHealthPanel';
 import { NotificationCenter } from './components/NotificationCenter';
+import { WorkspacePanel } from './components/WorkspacePanel';
 import { useSyncStore } from './store/sync';
 import { useNetworkStatus } from './hooks/useNetworkStatus';
 import { SyncFile, Device, SyncActivity, FileVersion, RecycleBinItem, SyncSchedule, LargeFileTransferItem, OfflineChangeAction, DeviceHealthMetrics, Notification, NotificationAction } from './types';
@@ -270,7 +271,7 @@ const getShareTokenFromPath = (): string | null => {
 };
 
 const App: React.FC = () => {
-  const [tab, setTab] = useState<'activity' | 'files' | 'devices' | 'health' | 'conflicts' | 'recyclebin' | 'schedule' | 'largetransfers' | 'storage' | 'snapshots' | 'ignorerules'>('activity');
+  const [tab, setTab] = useState<'activity' | 'files' | 'devices' | 'health' | 'conflicts' | 'recyclebin' | 'schedule' | 'largetransfers' | 'storage' | 'snapshots' | 'ignorerules' | 'workspaces'>('workspaces');
   const [shareToken, setShareToken] = useState<string | null>(getShareTokenFromPath());
   
   const networkStatus = useNetworkStatus();
@@ -307,6 +308,18 @@ const App: React.FC = () => {
   const clearAllNotifications = useSyncStore(state => state.clearAllNotifications);
   const toggleNotificationCenter = useSyncStore(state => state.toggleNotificationCenter);
   const closeNotificationCenter = useSyncStore(state => state.closeNotificationCenter);
+  
+  const workspaces = useSyncStore(state => state.workspaces);
+  const selectedWorkspaceId = useSyncStore(state => state.selectedWorkspaceId);
+  const isCreateWorkspaceModalOpen = useSyncStore(state => state.isCreateWorkspaceModalOpen);
+  const selectWorkspace = useSyncStore(state => state.selectWorkspace);
+  const createWorkspace = useSyncStore(state => state.createWorkspace);
+  const deleteWorkspace = useSyncStore(state => state.deleteWorkspace);
+  const openCreateWorkspaceModal = useSyncStore(state => state.openCreateWorkspaceModal);
+  const closeCreateWorkspaceModal = useSyncStore(state => state.closeCreateWorkspaceModal);
+  const addWorkspaceMember = useSyncStore(state => state.addWorkspaceMember);
+  const removeWorkspaceMember = useSyncStore(state => state.removeWorkspaceMember);
+  const updateMemberRole = useSyncStore(state => state.updateMemberRole);
   
   const setFiles = useSyncStore(state => state.setFiles);
   const setActivities = useSyncStore(state => state.setActivities);
@@ -584,6 +597,21 @@ const App: React.FC = () => {
 
     return (
       <>
+        {tab === 'workspaces' && (
+          <WorkspacePanel
+            workspaces={workspaces}
+            selectedWorkspaceId={selectedWorkspaceId}
+            isCreateModalOpen={isCreateWorkspaceModalOpen}
+            onSelectWorkspace={selectWorkspace}
+            onCreateWorkspace={createWorkspace}
+            onOpenCreateModal={openCreateWorkspaceModal}
+            onCloseCreateModal={closeCreateWorkspaceModal}
+            onDeleteWorkspace={deleteWorkspace}
+            onAddMember={addWorkspaceMember}
+            onRemoveMember={removeWorkspaceMember}
+            onUpdateRole={updateMemberRole}
+          />
+        )}
         {tab === 'activity' && <SyncActivityPanel activities={displayActivities} />}
         {tab === 'files' && (
           <FileList
@@ -705,6 +733,7 @@ const App: React.FC = () => {
           </button>
         </div>
         {[
+          { key: 'workspaces', label: '协作空间' },
           { key: 'activity', label: '同步动态' },
           { key: 'largetransfers', label: '大文件传输' },
           { key: 'schedule', label: '定时同步' },
