@@ -23,3 +23,19 @@ export interface SyncConflict {
   id: string; filePath: string; localVersion: FileVersion;
   remoteVersion: FileVersion; resolved: boolean; resolution?: 'local' | 'remote' | 'merge';
 }
+
+export type SyncActivityStatus = 'success' | 'failed' | 'conflict' | 'pending';
+export type SyncActivityAction = 'upload' | 'download' | 'delete' | 'modify';
+
+export interface SyncActivity {
+  id: string;
+  fileId: string;
+  fileName: string;
+  filePath: string;
+  status: SyncActivityStatus;
+  action: SyncActivityAction;
+  timestamp: string;
+  errorMessage?: string;
+  device?: string;
+  size?: number;
+}
