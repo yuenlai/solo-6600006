@@ -79,15 +79,19 @@ export const LargeFileTransferPanel: React.FC<Props> = ({ transfers, onPause, on
           <>
             <button
               onClick={() => onPause(transfer.id)}
-              style={actionButtonStyle}
-              title="暂停"
+              style={getButtonStyle('#ef6c00')}
+              title="暂停上传"
+              onMouseEnter={(e) => { e.currentTarget.style.background = '#ef6c0015'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = '#fff'; }}
             >
               ⏸ 暂停
             </button>
             <button
               onClick={() => onCancel(transfer.id)}
-              style={{ ...actionButtonStyle, color: '#c62828' }}
-              title="取消"
+              style={getButtonStyle('#c62828')}
+              title="取消上传"
+              onMouseEnter={(e) => { e.currentTarget.style.background = '#c6282815'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = '#fff'; }}
             >
               ✕ 取消
             </button>
@@ -98,15 +102,19 @@ export const LargeFileTransferPanel: React.FC<Props> = ({ transfers, onPause, on
           <>
             <button
               onClick={() => onResume(transfer.id)}
-              style={{ ...actionButtonStyle, color: '#2e7d32' }}
-              title="恢复"
+              style={getButtonStyle('#2e7d32')}
+              title="继续上传"
+              onMouseEnter={(e) => { e.currentTarget.style.background = '#2e7d3215'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = '#fff'; }}
             >
               ▶ 恢复
             </button>
             <button
               onClick={() => onCancel(transfer.id)}
-              style={{ ...actionButtonStyle, color: '#c62828' }}
-              title="取消"
+              style={getButtonStyle('#c62828')}
+              title="取消上传"
+              onMouseEnter={(e) => { e.currentTarget.style.background = '#c6282815'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = '#fff'; }}
             >
               ✕ 取消
             </button>
@@ -116,27 +124,33 @@ export const LargeFileTransferPanel: React.FC<Props> = ({ transfers, onPause, on
         return (
           <button
             onClick={() => onCancel(transfer.id)}
-            style={{ ...actionButtonStyle, color: '#c62828' }}
-            title="取消"
+            style={getButtonStyle('#c62828')}
+            title="取消排队"
+            onMouseEnter={(e) => { e.currentTarget.style.background = '#c6282815'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = '#fff'; }}
           >
             ✕ 取消
           </button>
         );
       case 'failed':
+        const isMaxRetries = transfer.retryCount >= transfer.maxRetries;
         return (
           <>
             <button
-              onClick={() => onRetry(transfer.id)}
-              style={{ ...actionButtonStyle, color: '#1976d2' }}
-              title="重试"
-              disabled={transfer.retryCount >= transfer.maxRetries}
+              onClick={() => !isMaxRetries && onRetry(transfer.id)}
+              style={getButtonStyle('#1976d2', isMaxRetries)}
+              title={isMaxRetries ? '已达到最大重试次数' : '重新上传'}
+              onMouseEnter={(e) => { if (!isMaxRetries) e.currentTarget.style.background = '#1976d215'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = isMaxRetries ? '#f5f5f5' : '#fff'; }}
             >
               ↻ 重试 {transfer.retryCount > 0 ? `(${transfer.retryCount}/${transfer.maxRetries})` : ''}
             </button>
             <button
               onClick={() => onCancel(transfer.id)}
-              style={{ ...actionButtonStyle, color: '#c62828' }}
-              title="删除"
+              style={getButtonStyle('#c62828')}
+              title="删除任务"
+              onMouseEnter={(e) => { e.currentTarget.style.background = '#c6282815'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = '#fff'; }}
             >
               ✕ 删除
             </button>
@@ -146,8 +160,10 @@ export const LargeFileTransferPanel: React.FC<Props> = ({ transfers, onPause, on
         return (
           <button
             onClick={() => onCancel(transfer.id)}
-            style={actionButtonStyle}
-            title="清除记录"
+            style={getButtonStyle('#666')}
+            title="清除已完成记录"
+            onMouseEnter={(e) => { e.currentTarget.style.background = '#f5f5f5'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = '#fff'; }}
           >
             ✕ 清除
           </button>
@@ -157,21 +173,29 @@ export const LargeFileTransferPanel: React.FC<Props> = ({ transfers, onPause, on
     }
   };
 
-  const actionButtonStyle: React.CSSProperties = {
+  const getButtonStyle = (color?: string, disabled?: boolean): React.CSSProperties => ({
     padding: '6px 12px',
-    border: '1px solid #e0e0e0',
+    border: `1px solid ${color ? color + '60' : '#e0e0e0'}`,
     borderRadius: '6px',
-    background: '#fff',
-    cursor: 'pointer',
+    background: disabled ? '#f5f5f5' : '#fff',
+    cursor: disabled ? 'not-allowed' : 'pointer',
     fontSize: '12px',
-    color: '#666',
+    color: disabled ? '#aaa' : (color || '#666'),
     display: 'flex',
     alignItems: 'center',
     gap: '4px',
-  };
+    opacity: disabled ? 0.6 : 1,
+    transition: 'all 0.15s ease',
+  });
 
   return (
     <div style={{ padding: '16px' }}>
+      <style>{`
+        @keyframes shimmer {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(100%); }
+        }
+      `}</style>
       <h3 style={{ margin: '0 0 16px' }}>大文件传输队列</h3>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '12px', marginBottom: '20px' }}>
@@ -186,6 +210,20 @@ export const LargeFileTransferPanel: React.FC<Props> = ({ transfers, onPause, on
           <button
             key={item.key}
             onClick={() => setFilter(item.key as LargeFileTransferStatus | 'all')}
+            onMouseEnter={(e) => {
+              if (filter !== item.key) {
+                e.currentTarget.style.background = `${item.color}08`;
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.1)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (filter !== item.key) {
+                e.currentTarget.style.background = '#fff';
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
+              }
+            }}
             style={{
               padding: '16px 12px',
               borderRadius: '8px',
@@ -193,10 +231,11 @@ export const LargeFileTransferPanel: React.FC<Props> = ({ transfers, onPause, on
               background: filter === item.key ? `${item.color}10` : '#fff',
               cursor: 'pointer',
               textAlign: 'center',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+              boxShadow: filter === item.key ? `0 2px 8px ${item.color}30` : '0 1px 3px rgba(0,0,0,0.1)',
+              transition: 'all 0.2s ease',
             }}
           >
-            <div style={{ fontSize: '24px', fontWeight: 'bold', color: item.color }}>{item.count}</div>
+            <div style={{ fontSize: '24px', fontWeight: 'bold', color: item.color, transition: 'transform 0.2s ease' }}>{item.count}</div>
             <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>{item.label}</div>
           </button>
         ))}
@@ -212,12 +251,21 @@ export const LargeFileTransferPanel: React.FC<Props> = ({ transfers, onPause, on
             return (
               <div
                 key={transfer.id}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
+                  e.currentTarget.style.transform = 'translateY(-1px)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.05)';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                }}
                 style={{
                   padding: '16px',
                   borderRadius: '8px',
                   background: '#fff',
                   border: '1px solid #e0e0e0',
                   boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                  transition: 'all 0.2s ease',
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', marginBottom: '12px' }}>
@@ -275,14 +323,23 @@ export const LargeFileTransferPanel: React.FC<Props> = ({ transfers, onPause, on
 
                 {transfer.status !== 'completed' && transfer.status !== 'failed' && (
                   <div style={{ marginBottom: '12px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#666', marginBottom: '4px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#666', marginBottom: '4px', fontWeight: 500 }}>
                       <span>{progress}%</span>
+                      {transfer.status === 'uploading' && (
+                        <span style={{ color: '#1976d2' }}>正在上传...</span>
+                      )}
+                      {transfer.status === 'paused' && (
+                        <span style={{ color: '#ef6c00' }}>已暂停</span>
+                      )}
+                      {transfer.status === 'pending' && (
+                        <span style={{ color: '#7b1fa2' }}>等待中...</span>
+                      )}
                     </div>
                     <div
                       style={{
-                        height: '8px',
+                        height: '10px',
                         background: '#f0f0f0',
-                        borderRadius: '4px',
+                        borderRadius: '5px',
                         overflow: 'hidden',
                       }}
                     >
@@ -290,11 +347,31 @@ export const LargeFileTransferPanel: React.FC<Props> = ({ transfers, onPause, on
                         style={{
                           height: '100%',
                           width: `${progress}%`,
-                          background: transfer.status === 'paused' ? '#ef6c00' : '#1976d2',
-                          borderRadius: '4px',
-                          transition: 'width 0.3s ease',
+                          background: transfer.status === 'paused' 
+                            ? '#ef6c00' 
+                            : transfer.status === 'pending'
+                            ? '#7b1fa2'
+                            : 'linear-gradient(90deg, #1976d2, #42a5f5)',
+                          borderRadius: '5px',
+                          transition: 'width 0.5s ease',
+                          position: 'relative',
+                          overflow: 'hidden',
                         }}
-                      />
+                      >
+                        {transfer.status === 'uploading' && (
+                          <div
+                            style={{
+                              position: 'absolute',
+                              top: 0,
+                              left: 0,
+                              right: 0,
+                              bottom: 0,
+                              background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent)',
+                              animation: 'shimmer 1.5s infinite',
+                            }}
+                          />
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}

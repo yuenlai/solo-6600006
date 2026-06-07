@@ -286,7 +286,32 @@ const App: React.FC = () => {
   const displayDevices = devices.length > 0 ? devices : mockDevices;
   const displaySchedules = schedules.length > 0 ? schedules : mockSchedules;
   const displayExecutions = scheduleExecutions;
-  const displayLargeFileTransfers = largeFileTransfers.length > 0 ? largeFileTransfers : mockLargeFileTransfers;
+  const displayLargeFileTransfers = largeFileTransfers;
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const state = useSyncStore.getState();
+      const updatedTransfers = state.largeFileTransfers.map(transfer => {
+        if (transfer.status === 'uploading' && transfer.uploaded < transfer.size) {
+          const increment = Math.floor(transfer.size * 0.02);
+          const newUploaded = Math.min(transfer.uploaded + increment, transfer.size);
+          const newStatus = newUploaded >= transfer.size ? 'completed' : 'uploading';
+          return {
+            ...transfer,
+            uploaded: newUploaded,
+            status: newStatus as any,
+            speed: newStatus === 'completed' ? 0 : transfer.speed + Math.floor(Math.random() * 50000),
+          };
+        }
+        return transfer;
+      });
+      const hasChanges = updatedTransfers.some((t, i) => t.uploaded !== state.largeFileTransfers[i].uploaded);
+      if (hasChanges) {
+        state.setLargeFileTransfers(updatedTransfers);
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   const selectedFile = versionHistory.fileId ? displayFiles.find(f => f.id === versionHistory.fileId) : null;
   const selectedVersions = versionHistory.selectedVersionIds && selectedFile
