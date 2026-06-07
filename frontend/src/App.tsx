@@ -348,47 +348,48 @@ const getShareTokenFromPath = (): string | null => {
 const App: React.FC = () => {
   const [tab, setTab] = useState<'activity' | 'files' | 'devices' | 'conflicts' | 'recyclebin' | 'schedule' | 'largetransfers'>('activity');
   const [shareToken, setShareToken] = useState<string | null>(getShareTokenFromPath());
-  const {
-    files,
-    activities,
-    conflicts,
-    recycleBin,
-    versionHistory,
-    devices,
-    schedules,
-    scheduleExecutions,
-    shareLinksPanelOpen,
-    shareLinksPanelFileId,
-    largeFileTransfers,
-    setFiles,
-    setActivities,
-    setConflicts,
-    resolveConflict,
-    batchResolveConflicts,
-    setRecycleBin,
-    setDevices,
-    setSchedules,
-    addSchedule,
-    updateSchedule,
-    deleteSchedule,
-    toggleSchedule,
-    runScheduleNow,
-    restoreFromRecycleBin,
-    deleteFromRecycleBin,
-    clearExpiredRecycleBin,
-    openVersionHistory,
-    closeVersionHistory,
-    selectVersionsForCompare,
-    closeCompare,
-    restoreVersion,
-    openShareLinksPanel,
-    closeShareLinksPanel,
-    setLargeFileTransfers,
-    pauseLargeFileTransfer,
-    resumeLargeFileTransfer,
-    retryLargeFileTransfer,
-    cancelLargeFileTransfer,
-  } = useSyncStore();
+  
+  const conflicts = useSyncStore(state => state.conflicts);
+  const setConflicts = useSyncStore(state => state.setConflicts);
+  const resolveConflict = useSyncStore(state => state.resolveConflict);
+  const batchResolveConflicts = useSyncStore(state => state.batchResolveConflicts);
+  
+  const files = useSyncStore(state => state.files);
+  const activities = useSyncStore(state => state.activities);
+  const recycleBin = useSyncStore(state => state.recycleBin);
+  const versionHistory = useSyncStore(state => state.versionHistory);
+  const devices = useSyncStore(state => state.devices);
+  const schedules = useSyncStore(state => state.schedules);
+  const scheduleExecutions = useSyncStore(state => state.scheduleExecutions);
+  const shareLinksPanelOpen = useSyncStore(state => state.shareLinksPanelOpen);
+  const shareLinksPanelFileId = useSyncStore(state => state.shareLinksPanelFileId);
+  const largeFileTransfers = useSyncStore(state => state.largeFileTransfers);
+  
+  const setFiles = useSyncStore(state => state.setFiles);
+  const setActivities = useSyncStore(state => state.setActivities);
+  const setRecycleBin = useSyncStore(state => state.setRecycleBin);
+  const setDevices = useSyncStore(state => state.setDevices);
+  const setSchedules = useSyncStore(state => state.setSchedules);
+  const addSchedule = useSyncStore(state => state.addSchedule);
+  const updateSchedule = useSyncStore(state => state.updateSchedule);
+  const deleteSchedule = useSyncStore(state => state.deleteSchedule);
+  const toggleSchedule = useSyncStore(state => state.toggleSchedule);
+  const runScheduleNow = useSyncStore(state => state.runScheduleNow);
+  const restoreFromRecycleBin = useSyncStore(state => state.restoreFromRecycleBin);
+  const deleteFromRecycleBin = useSyncStore(state => state.deleteFromRecycleBin);
+  const clearExpiredRecycleBin = useSyncStore(state => state.clearExpiredRecycleBin);
+  const openVersionHistory = useSyncStore(state => state.openVersionHistory);
+  const closeVersionHistory = useSyncStore(state => state.closeVersionHistory);
+  const selectVersionsForCompare = useSyncStore(state => state.selectVersionsForCompare);
+  const closeCompare = useSyncStore(state => state.closeCompare);
+  const restoreVersion = useSyncStore(state => state.restoreVersion);
+  const openShareLinksPanel = useSyncStore(state => state.openShareLinksPanel);
+  const closeShareLinksPanel = useSyncStore(state => state.closeShareLinksPanel);
+  const setLargeFileTransfers = useSyncStore(state => state.setLargeFileTransfers);
+  const pauseLargeFileTransfer = useSyncStore(state => state.pauseLargeFileTransfer);
+  const resumeLargeFileTransfer = useSyncStore(state => state.resumeLargeFileTransfer);
+  const retryLargeFileTransfer = useSyncStore(state => state.retryLargeFileTransfer);
+  const cancelLargeFileTransfer = useSyncStore(state => state.cancelLargeFileTransfer);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -402,7 +403,7 @@ const App: React.FC = () => {
     const state = useSyncStore.getState();
     if (state.files.length === 0) setFiles(mockFiles);
     if (state.activities.length === 0) setActivities(mockActivities);
-    if (state.conflicts.length === 0) setConflicts(mockConflicts);
+    if (state.conflicts.length === 0) setConflicts([...mockConflicts]);
     if (state.recycleBin.length === 0) setRecycleBin(mockRecycleBin);
     if (state.devices.length === 0) setDevices(mockDevices);
     if (state.schedules.length === 0) setSchedules(mockSchedules);

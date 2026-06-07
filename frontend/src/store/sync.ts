@@ -102,14 +102,14 @@ export const useSyncStore = create<SyncState>((set, get) => ({
   shareLinksPanelFileId: null,
   setFiles: (files) => set({ files }),
   setConflicts: (conflicts) => set({ conflicts }),
-  resolveConflict: (id, resolution) => set({
-    conflicts: useSyncStore.getState().conflicts.map(c =>
+  resolveConflict: (id, resolution) => set((state) => ({
+    conflicts: state.conflicts.map(c =>
       c.id === id ? { ...c, resolved: true, resolution, resolvedAt: new Date().toISOString(), resolvedBy: '用户' } : c)
-  }),
-  batchResolveConflicts: (ids, resolution) => set({
-    conflicts: useSyncStore.getState().conflicts.map(c =>
+  })),
+  batchResolveConflicts: (ids, resolution) => set((state) => ({
+    conflicts: state.conflicts.map(c =>
       ids.includes(c.id) ? { ...c, resolved: true, resolution, resolvedAt: new Date().toISOString(), resolvedBy: '用户' } : c)
-  }),
+  })),
   setCurrentFolder: (path) => set({ currentFolder: path }),
   startSync: () => set({ syncProgress: 0 }),
   addActivity: (activity) => set((state) => ({
