@@ -301,3 +301,28 @@ export interface RestoreSnapshotResult {
   restoredCount?: number;
   errors?: string[];
 }
+
+export type IgnoreRuleType = 'extension' | 'name_pattern' | 'directory';
+
+export interface IgnoreRule {
+  id: string;
+  type: IgnoreRuleType;
+  pattern: string;
+  description?: string;
+  directoryPath: string;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface IgnoreRuleGroup {
+  directoryPath: string;
+  directoryName: string;
+  rules: IgnoreRule[];
+}
+
+export interface IgnoreRuleMatchResult {
+  filePath: string;
+  matched: boolean;
+  matchedRule?: IgnoreRule;
+}

@@ -1,8 +1,71 @@
 import { create } from 'zustand';
-import { SyncFile, SyncFolder, Device, SyncConflict, SyncActivity, FileVersion, RecycleBinItem, RestoreResult, DeviceWizardData, SpaceValidationResult, SyncSchedule, ScheduleExecution, ShareLink, LargeFileTransferItem, StorageAnalysisData, OfflineChange, SyncProgress, DirectorySnapshot, RestoreSnapshotResult, SnapshotFileItem } from '../types';
+import { SyncFile, SyncFolder, Device, SyncConflict, SyncActivity, FileVersion, RecycleBinItem, RestoreResult, DeviceWizardData, SpaceValidationResult, SyncSchedule, ScheduleExecution, ShareLink, LargeFileTransferItem, StorageAnalysisData, OfflineChange, SyncProgress, DirectorySnapshot, RestoreSnapshotResult, SnapshotFileItem, IgnoreRule, IgnoreRuleMatchResult } from '../types';
 import { offlineStorage } from '../utils/offlineStorage';
 
 const now = new Date();
+
+const mockIgnoreRules: IgnoreRule[] = [
+  {
+    id: 'rule-1',
+    type: 'extension',
+    pattern: '.tmp',
+    description: '临时文件',
+    directoryPath: '/',
+    enabled: true,
+    createdAt: new Date(now.getTime() - 30 * 86400000).toISOString(),
+    updatedAt: new Date(now.getTime() - 30 * 86400000).toISOString(),
+  },
+  {
+    id: 'rule-2',
+    type: 'extension',
+    pattern: '.log',
+    description: '日志文件',
+    directoryPath: '/',
+    enabled: true,
+    createdAt: new Date(now.getTime() - 25 * 86400000).toISOString(),
+    updatedAt: new Date(now.getTime() - 25 * 86400000).toISOString(),
+  },
+  {
+    id: 'rule-3',
+    type: 'name_pattern',
+    pattern: 'node_modules',
+    description: 'Node.js 依赖目录',
+    directoryPath: '/',
+    enabled: true,
+    createdAt: new Date(now.getTime() - 20 * 86400000).toISOString(),
+    updatedAt: new Date(now.getTime() - 20 * 86400000).toISOString(),
+  },
+  {
+    id: 'rule-4',
+    type: 'name_pattern',
+    pattern: '.DS_Store',
+    description: 'macOS 系统文件',
+    directoryPath: '/',
+    enabled: true,
+    createdAt: new Date(now.getTime() - 15 * 86400000).toISOString(),
+    updatedAt: new Date(now.getTime() - 15 * 86400000).toISOString(),
+  },
+  {
+    id: 'rule-5',
+    type: 'extension',
+    pattern: '.cache',
+    description: '缓存文件',
+    directoryPath: '/data',
+    enabled: false,
+    createdAt: new Date(now.getTime() - 10 * 86400000).toISOString(),
+    updatedAt: new Date(now.getTime() - 5 * 86400000).toISOString(),
+  },
+  {
+    id: 'rule-6',
+    type: 'directory',
+    pattern: 'backup',
+    description: '本地备份目录',
+    directoryPath: '/docs',
+    enabled: true,
+    createdAt: new Date(now.getTime() - 7 * 86400000).toISOString(),
+    updatedAt: new Date(now.getTime() - 7 * 86400000).toISOString(),
+  },
+];
 
 const mockSnapshots: DirectorySnapshot[] = [
   {
@@ -280,6 +343,14 @@ interface SyncState {
   restoreSnapshot: (snapshotId: string) => RestoreSnapshotResult;
   deleteSnapshot: (snapshotId: string) => void;
   updateSnapshot: (snapshotId: string, updates: Partial<DirectorySnapshot>) => void;
+  ignoreRules: IgnoreRule[];
+  setIgnoreRules: (rules: IgnoreRule[]) => void;
+  addIgnoreRule: (rule: Omit<IgnoreRule, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  updateIgnoreRule: (id: string, updates: Partial<IgnoreRule>) => void;
+  deleteIgnoreRule: (id: string) => void;
+  toggleIgnoreRule: (id: string) => void;
+  testIgnoreRule: (filePath: string, rulePattern: string, ruleType: IgnoreRule['type']) => boolean;
+  checkFileIgnored: (filePath: string) => IgnoreRuleMatchResult;
 }
 
 export const useSyncStore = create<SyncState>((set, get) => ({
@@ -289,6 +360,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
   largeFileTransfers: [],
   storageAnalysis: mockStorageAnalysis,
   snapshots: [...mockSnapshots],
+  ignoreRules: [...mockIgnoreRules],
   offlineChanges: [],
   offlineSyncProgress: {
     total: 0,
@@ -905,4 +977,68 @@ export const useSyncStore = create<SyncState>((set, get) => ({
       s.id === snapshotId ? { ...s, ...updates } : s
     ),
   })),
+
+  setIgnoreRules: (rules) => set({ ignoreRules: rules }),
+
+  addIgnoreRule: (rule) => {
+    const now = new Date().toISOString();
+    const newRule: IgnoreRule = {
+      ...rule,
+      id: `rule-${Date.now()}`,
+      createdAt: now,
+      updatedAt: now,
+    };
+    set((state) => ({
+      ignoreRules: [...state.ignoreRules, newRule],
+    }));
+  },
+
+  updateIgnoreRule: (id, updates) => set((state) => ({
+    ignoreRules: state.ignoreRules.map(r =>
+      r.id === id ? { ...r, ...updates, updatedAt: new Date().toISOString() } : r
+    ),
+  })),
+
+  deleteIgnoreRule: (id) => set((state) => ({
+    ignoreRules: state.ignoreRules.filter(r => r.id !== id),
+  })),
+
+  toggleIgnoreRule: (id) => set((state) => ({
+    ignoreRules: state.ignoreRules.map(r =>
+      r.id === id ? { ...r, enabled: !r.enabled, updatedAt: new Date().toISOString() } : r
+    ),
+  })),
+
+  testIgnoreRule: (filePath, rulePattern, ruleType) => {
+    const fileName = filePath.split('/').pop() || filePath;
+    switch (ruleType) {
+      case 'extension':
+        const ext = rulePattern.startsWith('.') ? rulePattern : `.${rulePattern}`;
+        return fileName.toLowerCase().endsWith(ext.toLowerCase());
+      case 'name_pattern':
+        try {
+          const regex = new RegExp(rulePattern, 'i');
+          return regex.test(fileName);
+        } catch {
+          return fileName.toLowerCase().includes(rulePattern.toLowerCase());
+        }
+      case 'directory':
+        const pathParts = filePath.split('/').filter(Boolean);
+        return pathParts.some(part => part.toLowerCase() === rulePattern.toLowerCase());
+      default:
+        return false;
+    }
+  },
+
+  checkFileIgnored: (filePath) => {
+    const state = get();
+    const enabledRules = state.ignoreRules.filter(r => r.enabled);
+    for (const rule of enabledRules) {
+      const isInDirectory = filePath.startsWith(rule.directoryPath) || rule.directoryPath === '/';
+      if (isInDirectory && get().testIgnoreRule(filePath, rule.pattern, rule.type)) {
+        return { filePath, matched: true, matchedRule: rule };
+      }
+    }
+    return { filePath, matched: false };
+  },
 }));

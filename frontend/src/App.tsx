@@ -14,6 +14,7 @@ import { ConflictResolutionCenter } from './components/ConflictResolutionCenter'
 import { StorageAnalysisPanel } from './components/StorageAnalysisPanel';
 import { OfflineSyncPanel } from './components/OfflineSyncPanel';
 import { DirectorySnapshotPanel } from './components/DirectorySnapshotPanel';
+import { IgnoreRulesPanel } from './components/IgnoreRulesPanel';
 import { useSyncStore } from './store/sync';
 import { useNetworkStatus } from './hooks/useNetworkStatus';
 import { SyncFile, Device, SyncActivity, FileVersion, RecycleBinItem, SyncSchedule, LargeFileTransferItem, OfflineChangeAction } from './types';
@@ -228,7 +229,7 @@ const getShareTokenFromPath = (): string | null => {
 };
 
 const App: React.FC = () => {
-  const [tab, setTab] = useState<'activity' | 'files' | 'devices' | 'conflicts' | 'recyclebin' | 'schedule' | 'largetransfers' | 'storage' | 'snapshots'>('activity');
+  const [tab, setTab] = useState<'activity' | 'files' | 'devices' | 'conflicts' | 'recyclebin' | 'schedule' | 'largetransfers' | 'storage' | 'snapshots' | 'ignorerules'>('activity');
   const [shareToken, setShareToken] = useState<string | null>(getShareTokenFromPath());
   
   const networkStatus = useNetworkStatus();
@@ -249,6 +250,7 @@ const App: React.FC = () => {
   const largeFileTransfers = useSyncStore(state => state.largeFileTransfers);
   const storageAnalysis = useSyncStore(state => state.storageAnalysis);
   const snapshots = useSyncStore(state => state.snapshots);
+  const ignoreRules = useSyncStore(state => state.ignoreRules);
   const offlineChanges = useSyncStore(state => state.offlineChanges);
   const offlineSyncProgress = useSyncStore(state => state.offlineSyncProgress);
   const isOfflinePanelOpen = useSyncStore(state => state.isOfflinePanelOpen);
@@ -294,6 +296,11 @@ const App: React.FC = () => {
   const restoreSnapshot = useSyncStore(state => state.restoreSnapshot);
   const deleteSnapshot = useSyncStore(state => state.deleteSnapshot);
   const updateSnapshot = useSyncStore(state => state.updateSnapshot);
+  const addIgnoreRule = useSyncStore(state => state.addIgnoreRule);
+  const updateIgnoreRule = useSyncStore(state => state.updateIgnoreRule);
+  const deleteIgnoreRule = useSyncStore(state => state.deleteIgnoreRule);
+  const toggleIgnoreRule = useSyncStore(state => state.toggleIgnoreRule);
+  const checkFileIgnored = useSyncStore(state => state.checkFileIgnored);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -514,6 +521,17 @@ const App: React.FC = () => {
             onUpdateSnapshot={updateSnapshot}
           />
         )}
+        {tab === 'ignorerules' && (
+          <IgnoreRulesPanel
+            rules={ignoreRules}
+            directories={storageAnalysis.byDirectory.map(d => ({ path: d.path, name: d.name }))}
+            onAddRule={addIgnoreRule}
+            onUpdateRule={updateIgnoreRule}
+            onDeleteRule={deleteIgnoreRule}
+            onToggleRule={toggleIgnoreRule}
+            onCheckFile={checkFileIgnored}
+          />
+        )}
       </>
     );
   };
@@ -528,6 +546,7 @@ const App: React.FC = () => {
           { key: 'schedule', label: '定时同步' },
           { key: 'storage', label: '空间分析' },
           { key: 'snapshots', label: '目录快照' },
+          { key: 'ignorerules', label: '忽略规则' },
           { key: 'files', label: '文件列表' },
           { key: 'devices', label: '设备管理' },
           { key: 'conflicts', label: '冲突处理' },
