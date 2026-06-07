@@ -15,9 +15,10 @@ import { StorageAnalysisPanel } from './components/StorageAnalysisPanel';
 import { OfflineSyncPanel } from './components/OfflineSyncPanel';
 import { DirectorySnapshotPanel } from './components/DirectorySnapshotPanel';
 import { IgnoreRulesPanel } from './components/IgnoreRulesPanel';
+import { DeviceHealthPanel } from './components/DeviceHealthPanel';
 import { useSyncStore } from './store/sync';
 import { useNetworkStatus } from './hooks/useNetworkStatus';
-import { SyncFile, Device, SyncActivity, FileVersion, RecycleBinItem, SyncSchedule, LargeFileTransferItem, OfflineChangeAction } from './types';
+import { SyncFile, Device, SyncActivity, FileVersion, RecycleBinItem, SyncSchedule, LargeFileTransferItem, OfflineChangeAction, DeviceHealthMetrics } from './types';
 
 const now = new Date();
 
@@ -42,6 +43,45 @@ const mockDevices: Device[] = [
   { id: 'd1', name: 'MacBook Pro', platform: 'mac', lastSeen: '2026-06-06T12:00:00Z', status: 'online', storageUsed: 5368709120, storageTotal: 107374182400 },
   { id: 'd2', name: 'Ubuntu Server', platform: 'linux', lastSeen: '2026-06-06T11:00:00Z', status: 'online', storageUsed: 10737418240, storageTotal: 53687091200 },
   { id: 'd3', name: 'Windows Desktop', platform: 'windows', lastSeen: '2026-06-05T20:00:00Z', status: 'offline', storageUsed: 2147483648, storageTotal: 107374182400 },
+];
+
+const mockDeviceHealth: DeviceHealthMetrics[] = [
+  {
+    deviceId: 'd1',
+    deviceName: 'MacBook Pro',
+    platform: 'mac',
+    status: 'online',
+    recentSyncLatency: 145,
+    anomalyCount: 2,
+    diskUsed: 5368709120,
+    diskTotal: 107374182400,
+    connectionQualityScore: 92,
+    lastSyncTime: new Date(now.getTime() - 5 * 60000).toISOString(),
+  },
+  {
+    deviceId: 'd2',
+    deviceName: 'Ubuntu Server',
+    platform: 'linux',
+    status: 'online',
+    recentSyncLatency: 520,
+    anomalyCount: 5,
+    diskUsed: 10737418240,
+    diskTotal: 53687091200,
+    connectionQualityScore: 68,
+    lastSyncTime: new Date(now.getTime() - 30 * 60000).toISOString(),
+  },
+  {
+    deviceId: 'd3',
+    deviceName: 'Windows Desktop',
+    platform: 'windows',
+    status: 'offline',
+    recentSyncLatency: 0,
+    anomalyCount: 8,
+    diskUsed: 2147483648,
+    diskTotal: 107374182400,
+    connectionQualityScore: 35,
+    lastSyncTime: new Date(now.getTime() - 24 * 3600000).toISOString(),
+  },
 ];
 
 const mockActivities: SyncActivity[] = [
@@ -229,7 +269,7 @@ const getShareTokenFromPath = (): string | null => {
 };
 
 const App: React.FC = () => {
-  const [tab, setTab] = useState<'activity' | 'files' | 'devices' | 'conflicts' | 'recyclebin' | 'schedule' | 'largetransfers' | 'storage' | 'snapshots' | 'ignorerules'>('activity');
+  const [tab, setTab] = useState<'activity' | 'files' | 'devices' | 'health' | 'conflicts' | 'recyclebin' | 'schedule' | 'largetransfers' | 'storage' | 'snapshots' | 'ignorerules'>('activity');
   const [shareToken, setShareToken] = useState<string | null>(getShareTokenFromPath());
   
   const networkStatus = useNetworkStatus();
@@ -474,6 +514,7 @@ const App: React.FC = () => {
           />
         )}
         {tab === 'devices' && <DevicePanel devices={displayDevices} />}
+        {tab === 'health' && <DeviceHealthPanel devices={mockDeviceHealth} />}
         {tab === 'conflicts' && (
           <ConflictResolutionCenter
             conflicts={displayConflicts}
@@ -549,6 +590,7 @@ const App: React.FC = () => {
           { key: 'ignorerules', label: '忽略规则' },
           { key: 'files', label: '文件列表' },
           { key: 'devices', label: '设备管理' },
+          { key: 'health', label: '健康诊断' },
           { key: 'conflicts', label: '冲突处理' },
           { key: 'recyclebin', label: '回收站' }
         ].map(t => (

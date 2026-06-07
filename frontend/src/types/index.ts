@@ -326,3 +326,16 @@ export interface IgnoreRuleMatchResult {
   matched: boolean;
   matchedRule?: IgnoreRule;
 }
+
+export interface DeviceHealthMetrics {
+  deviceId: string;
+  deviceName: string;
+  platform: string;
+  status: 'online' | 'offline';
+  recentSyncLatency: number;
+  anomalyCount: number;
+  diskUsed: number;
+  diskTotal: number;
+  connectionQualityScore: number;
+  lastSyncTime: string;
+}
