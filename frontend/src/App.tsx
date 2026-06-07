@@ -1,12 +1,28 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FileList } from './components/FileList';
 import { DevicePanel } from './components/DevicePanel';
 import { SyncActivityPanel } from './components/SyncActivityPanel';
-import { SyncFile, Device, SyncActivity } from './types';
+import { VersionHistoryPanel } from './components/VersionHistoryPanel';
+import { VersionComparePanel } from './components/VersionComparePanel';
+import { useSyncStore } from './store/sync';
+import { SyncFile, Device, SyncActivity, FileVersion } from './types';
+
+const now = new Date();
+
+const mockVersions: FileVersion[] = [
+  { id: 'v1', version: 1, size: 204800, hash: 'a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6', createdAt: new Date(now.getTime() - 7 * 86400000).toISOString(), author: '张三', changeType: 'added', device: 'MacBook Pro' },
+  { id: 'v2', version: 2, size: 225280, hash: 'b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7', createdAt: new Date(now.getTime() - 5 * 86400000).toISOString(), author: '李四', changeType: 'modified', device: 'Windows Desktop' },
+  { id: 'v3', version: 3, size: 245760, hash: 'c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8', createdAt: new Date(now.getTime() - 2 * 86400000).toISOString(), author: '张三', changeType: 'modified', device: 'MacBook Pro' },
+  { id: 'v4', version: 4, size: 262144, hash: 'd4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9', createdAt: new Date(now.getTime() - 1 * 86400000).toISOString(), author: '王五', changeType: 'modified', device: 'Ubuntu Server' },
+  { id: 'v5', version: 5, size: 245760, hash: 'e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0', createdAt: new Date(now.getTime() - 2 * 3600000).toISOString(), author: '张三', changeType: 'modified', device: 'MacBook Pro' },
+];
 
 const mockFiles: SyncFile[] = [
-  { id: '1', path: '/docs/report.pdf', name: 'report.pdf', size: 245760, modifiedAt: '2026-06-06T10:00:00Z', status: 'synced', versions: [{ id: 'v1', version: 1, size: 245760, hash: 'abc123', createdAt: '2026-06-06T10:00:00Z', author: 'user1', changeType: 'added' }] },
-  { id: '2', path: '/docs/notes.md', name: 'notes.md', size: 4096, modifiedAt: '2026-06-06T11:30:00Z', status: 'modified', versions: [] },
+  { id: '1', path: '/docs/report.pdf', name: 'report.pdf', size: 245760, modifiedAt: '2026-06-06T10:00:00Z', status: 'synced', versions: mockVersions },
+  { id: '2', path: '/docs/notes.md', name: 'notes.md', size: 4096, modifiedAt: '2026-06-06T11:30:00Z', status: 'modified', versions: [
+    { id: 'v1', version: 1, size: 2048, hash: 'abc123', createdAt: new Date(now.getTime() - 3 * 86400000).toISOString(), author: 'user1', changeType: 'added', device: 'MacBook Pro' },
+    { id: 'v2', version: 2, size: 4096, hash: 'def456', createdAt: new Date(now.getTime() - 1 * 86400000).toISOString(), author: 'user1', changeType: 'modified', device: 'MacBook Pro' },
+  ] },
   { id: '3', path: '/photos/img001.jpg', name: 'img001.jpg', size: 3145728, modifiedAt: '2026-06-05T15:00:00Z', status: 'conflict', versions: [] },
 ];
 
@@ -16,7 +32,6 @@ const mockDevices: Device[] = [
   { id: 'd3', name: 'Windows Desktop', platform: 'windows', lastSeen: '2026-06-05T20:00:00Z', status: 'offline', storageUsed: 2147483648, storageTotal: 107374182400 },
 ];
 
-const now = new Date();
 const mockActivities: SyncActivity[] = [
   { id: 'a1', fileId: '1', fileName: 'report.pdf', filePath: '/docs/report.pdf', status: 'success', action: 'upload', timestamp: new Date(now.getTime() - 2 * 60000).toISOString(), device: 'MacBook Pro', size: 245760 },
   { id: 'a2', fileId: '4', fileName: 'presentation.pptx', filePath: '/docs/presentation.pptx', status: 'pending', action: 'upload', timestamp: new Date(now.getTime() - 5 * 60000).toISOString(), device: 'MacBook Pro', size: 5242880 },
@@ -30,6 +45,74 @@ const mockActivities: SyncActivity[] = [
 
 const App: React.FC = () => {
   const [tab, setTab] = useState<'activity' | 'files' | 'devices' | 'conflicts'>('activity');
+  const {
+    files,
+    activities,
+    versionHistory,
+    setFiles,
+    setActivities,
+    openVersionHistory,
+    closeVersionHistory,
+    selectVersionsForCompare,
+    closeCompare,
+    restoreVersion,
+  } = useSyncStore();
+
+  useEffect(() => {
+    setFiles(mockFiles);
+    setActivities(mockActivities);
+  }, [setFiles, setActivities]);
+
+  const displayFiles = files.length > 0 ? files : mockFiles;
+  const displayActivities = activities.length > 0 ? activities : mockActivities;
+
+  const selectedFile = versionHistory.fileId ? displayFiles.find(f => f.id === versionHistory.fileId) : null;
+  const selectedVersions = versionHistory.selectedVersionIds && selectedFile
+    ? [
+        selectedFile.versions.find(v => v.id === versionHistory.selectedVersionIds![0]),
+        selectedFile.versions.find(v => v.id === versionHistory.selectedVersionIds![1]),
+      ].filter(Boolean) as FileVersion[]
+    : [];
+
+  const renderContent = () => {
+    if (versionHistory.isOpen && selectedFile) {
+      if (versionHistory.showCompare && selectedVersions.length === 2) {
+        return (
+          <VersionComparePanel
+            oldVersion={selectedVersions[0]}
+            newVersion={selectedVersions[1]}
+            onRestore={(version) => {
+              restoreVersion(selectedFile.id, version);
+            }}
+            onClose={closeCompare}
+          />
+        );
+      }
+      return (
+        <VersionHistoryPanel
+          file={selectedFile}
+          onSelectVersions={(oldId, newId) => selectVersionsForCompare(oldId, newId)}
+          onRestore={(version) => restoreVersion(selectedFile.id, version)}
+          onClose={closeVersionHistory}
+        />
+      );
+    }
+
+    return (
+      <>
+        {tab === 'activity' && <SyncActivityPanel activities={displayActivities} />}
+        {tab === 'files' && (
+          <FileList
+            files={displayFiles}
+            onViewHistory={(fileId) => openVersionHistory(fileId)}
+          />
+        )}
+        {tab === 'devices' && <DevicePanel devices={mockDevices} />}
+        {tab === 'conflicts' && <div style={{ padding: '16px' }}><h3>Conflicts</h3><p style={{ color: '#999' }}>No conflicts</p></div>}
+      </>
+    );
+  };
+
   return (
     <div style={{ display: 'flex', height: '100vh', fontFamily: 'sans-serif' }}>
       <nav style={{ width: '200px', background: '#263238', color: '#fff', padding: '20px 0' }}>
@@ -40,17 +123,19 @@ const App: React.FC = () => {
           { key: 'devices', label: 'Devices' },
           { key: 'conflicts', label: 'Conflicts' }
         ].map(t => (
-          <button key={t.key} onClick={() => setTab(t.key as any)} style={{
+          <button key={t.key} onClick={() => {
+            setTab(t.key as any);
+            if (versionHistory.isOpen) {
+              closeVersionHistory();
+            }
+          }} style={{
             display: 'block', width: '100%', padding: '12px 16px', border: 'none', textAlign: 'left',
             cursor: 'pointer', background: tab === t.key ? 'rgba(255,255,255,0.1)' : 'transparent', color: '#fff', fontSize: '14px'
           }}>{t.label}</button>
         ))}
       </nav>
       <main style={{ flex: 1, overflow: 'auto', background: '#fafafa' }}>
-        {tab === 'activity' && <SyncActivityPanel activities={mockActivities} />}
-        {tab === 'files' && <FileList files={mockFiles} />}
-        {tab === 'devices' && <DevicePanel devices={mockDevices} />}
-        {tab === 'conflicts' && <div style={{ padding: '16px' }}><h3>Conflicts</h3><p style={{ color: '#999' }}>No conflicts</p></div>}
+        {renderContent()}
       </main>
     </div>
   );

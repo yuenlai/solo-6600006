@@ -1,9 +1,12 @@
 import React from 'react';
 import { SyncFile } from '../types';
 
-interface Props { files: SyncFile[]; }
+interface Props {
+  files: SyncFile[];
+  onViewHistory: (fileId: string) => void;
+}
 
-export const FileList: React.FC<Props> = ({ files }) => (
+export const FileList: React.FC<Props> = ({ files, onViewHistory }) => (
   <div style={{ padding: '16px' }}>
     <h3 style={{ margin: '0 0 12px' }}>Files</h3>
     {files.length === 0 ? <p style={{ color: '#999' }}>No files</p> :
@@ -13,6 +16,7 @@ export const FileList: React.FC<Props> = ({ files }) => (
             <th style={{ padding: '8px' }}>Name</th><th style={{ padding: '8px' }}>Size</th>
             <th style={{ padding: '8px' }}>Modified</th><th style={{ padding: '8px' }}>Status</th>
             <th style={{ padding: '8px' }}>Versions</th>
+            <th style={{ padding: '8px' }}>操作</th>
           </tr>
         </thead>
         <tbody>
@@ -28,6 +32,23 @@ export const FileList: React.FC<Props> = ({ files }) => (
                 }}>{f.status}</span>
               </td>
               <td style={{ padding: '8px', fontSize: '12px' }}>v{f.versions.length}</td>
+              <td style={{ padding: '8px' }}>
+                <button
+                  onClick={() => onViewHistory(f.id)}
+                  disabled={f.versions.length === 0}
+                  style={{
+                    padding: '4px 12px',
+                    fontSize: '11px',
+                    border: '1px solid #1976d2',
+                    borderRadius: '4px',
+                    background: f.versions.length > 0 ? 'transparent' : '#f5f5f5',
+                    color: f.versions.length > 0 ? '#1976d2' : '#999',
+                    cursor: f.versions.length > 0 ? 'pointer' : 'not-allowed',
+                  }}
+                >
+                  历史版本
+                </button>
+              </td>
             </tr>
           ))}
         </tbody>

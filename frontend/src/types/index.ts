@@ -7,6 +7,21 @@ export interface SyncFile {
 export interface FileVersion {
   id: string; version: number; size: number; hash: string;
   createdAt: string; author: string; changeType: 'added' | 'modified' | 'deleted';
+  device?: string;
+}
+
+export interface VersionDiff {
+  oldVersion: FileVersion;
+  newVersion: FileVersion;
+  sizeChange: number;
+  summary: string;
+  changedFields: string[];
+}
+
+export interface VersionHistoryState {
+  selectedFileId: string | null;
+  selectedVersions: [string, string] | null;
+  showCompare: boolean;
 }
 
 export interface SyncFolder {
