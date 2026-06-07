@@ -171,3 +171,22 @@ export interface ShareLinkAccessResult {
   message: string;
   shareLink?: ShareLink;
 }
+
+export type LargeFileTransferStatus = 'uploading' | 'paused' | 'pending' | 'completed' | 'failed';
+
+export interface LargeFileTransferItem {
+  id: string;
+  fileId: string;
+  fileName: string;
+  filePath: string;
+  size: number;
+  uploaded: number;
+  status: LargeFileTransferStatus;
+  speed: number;
+  startTime: string;
+  estimatedEndTime?: string;
+  errorMessage?: string;
+  device?: string;
+  retryCount: number;
+  maxRetries: number;
+}

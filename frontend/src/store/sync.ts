@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { SyncFile, SyncFolder, Device, SyncConflict, SyncActivity, FileVersion, RecycleBinItem, RestoreResult, DeviceWizardData, SpaceValidationResult, SyncSchedule, ScheduleExecution, ShareLink } from '../types';
+import { SyncFile, SyncFolder, Device, SyncConflict, SyncActivity, FileVersion, RecycleBinItem, RestoreResult, DeviceWizardData, SpaceValidationResult, SyncSchedule, ScheduleExecution, ShareLink, LargeFileTransferItem } from '../types';
 
 interface VersionHistoryViewState {
   isOpen: boolean;
@@ -21,6 +21,7 @@ interface SyncState {
   shareLinks: ShareLink[];
   shareLinksPanelOpen: boolean;
   shareLinksPanelFileId: string | null;
+  largeFileTransfers: LargeFileTransferItem[];
   setFiles: (files: SyncFile[]) => void;
   resolveConflict: (id: string, resolution: 'local' | 'remote' | 'merge') => void;
   setCurrentFolder: (path: string) => void;
@@ -57,12 +58,21 @@ interface SyncState {
   deleteShareLink: (id: string) => void;
   openShareLinksPanel: (fileId: string) => void;
   closeShareLinksPanel: () => void;
+  setLargeFileTransfers: (transfers: LargeFileTransferItem[]) => void;
+  addLargeFileTransfer: (transfer: Omit<LargeFileTransferItem, 'id' | 'startTime' | 'retryCount'>) => void;
+  updateLargeFileTransfer: (id: string, updates: Partial<LargeFileTransferItem>) => void;
+  removeLargeFileTransfer: (id: string) => void;
+  pauseLargeFileTransfer: (id: string) => void;
+  resumeLargeFileTransfer: (id: string) => void;
+  retryLargeFileTransfer: (id: string) => void;
+  cancelLargeFileTransfer: (id: string) => void;
 }
 
 export const useSyncStore = create<SyncState>((set, get) => ({
   files: [], folders: [], devices: [], conflicts: [], activities: [],
   recycleBin: [],
   currentFolder: '/', syncProgress: 0,
+  largeFileTransfers: [],
   versionHistory: {
     isOpen: false,
     fileId: null,
@@ -340,4 +350,54 @@ export const useSyncStore = create<SyncState>((set, get) => ({
     shareLinksPanelOpen: false,
     shareLinksPanelFileId: null,
   }),
+  setLargeFileTransfers: (transfers) => set({ largeFileTransfers: transfers }),
+  addLargeFileTransfer: (transfer) => {
+    const newTransfer: LargeFileTransferItem = {
+      ...transfer,
+      id: `lft-${Date.now()}`,
+      startTime: new Date().toISOString(),
+      retryCount: 0,
+    };
+    set((state) => ({
+      largeFileTransfers: [newTransfer, ...state.largeFileTransfers],
+    }));
+  },
+  updateLargeFileTransfer: (id, updates) => set((state) => ({
+    largeFileTransfers: state.largeFileTransfers.map(t =>
+      t.id === id ? { ...t, ...updates } : t
+    ),
+  })),
+  removeLargeFileTransfer: (id) => set((state) => ({
+    largeFileTransfers: state.largeFileTransfers.filter(t => t.id !== id),
+  })),
+  pauseLargeFileTransfer: (id) => set((state) => ({
+    largeFileTransfers: state.largeFileTransfers.map(t =>
+      t.id === id ? { ...t, status: 'paused' } : t
+    ),
+  })),
+  resumeLargeFileTransfer: (id) => set((state) => ({
+    largeFileTransfers: state.largeFileTransfers.map(t =>
+      t.id === id ? { ...t, status: 'uploading' } : t
+    ),
+  })),
+  retryLargeFileTransfer: (id) => set((state) => {
+    const transfer = state.largeFileTransfers.find(t => t.id === id);
+    if (!transfer) return state;
+    const newRetryCount = transfer.retryCount + 1;
+    return {
+      largeFileTransfers: state.largeFileTransfers.map(t =>
+        t.id === id ? {
+          ...t,
+          status: 'uploading',
+          uploaded: 0,
+          errorMessage: undefined,
+          retryCount: newRetryCount,
+          startTime: new Date().toISOString(),
+        } : t
+      ),
+    };
+  }),
+  cancelLargeFileTransfer: (id) => set((state) => ({
+    largeFileTransfers: state.largeFileTransfers.filter(t => t.id !== id),
+  })),
 }));

@@ -9,8 +9,9 @@ import { DeviceOnboardingWizard } from './components/DeviceOnboardingWizard';
 import { SyncSchedulePanel } from './components/SyncSchedulePanel';
 import { ShareLinksPanel } from './components/ShareLinksPanel';
 import { ShareAccessPage } from './components/ShareAccessPage';
+import { LargeFileTransferPanel } from './components/LargeFileTransferPanel';
 import { useSyncStore } from './store/sync';
-import { SyncFile, Device, SyncActivity, FileVersion, RecycleBinItem, SyncSchedule } from './types';
+import { SyncFile, Device, SyncActivity, FileVersion, RecycleBinItem, SyncSchedule, LargeFileTransferItem } from './types';
 
 const now = new Date();
 
@@ -84,6 +85,80 @@ const mockSchedules: SyncSchedule[] = [
   },
 ];
 
+const mockLargeFileTransfers: LargeFileTransferItem[] = [
+  {
+    id: 'lft-1',
+    fileId: 'lf1',
+    fileName: '项目资料备份.zip',
+    filePath: '/backup/项目资料备份.zip',
+    size: 2147483648,
+    uploaded: 1610612736,
+    status: 'uploading',
+    speed: 1048576,
+    startTime: new Date(now.getTime() - 10 * 60000).toISOString(),
+    device: 'MacBook Pro',
+    retryCount: 0,
+    maxRetries: 3,
+  },
+  {
+    id: 'lft-2',
+    fileId: 'lf2',
+    fileName: '视频素材合集.mp4',
+    filePath: '/videos/视频素材合集.mp4',
+    size: 5368709120,
+    uploaded: 2147483648,
+    status: 'paused',
+    speed: 0,
+    startTime: new Date(now.getTime() - 30 * 60000).toISOString(),
+    device: 'MacBook Pro',
+    retryCount: 0,
+    maxRetries: 3,
+  },
+  {
+    id: 'lft-3',
+    fileId: 'lf3',
+    fileName: '大型数据集.csv',
+    filePath: '/data/大型数据集.csv',
+    size: 1073741824,
+    uploaded: 0,
+    status: 'pending',
+    speed: 0,
+    startTime: new Date(now.getTime() - 5 * 60000).toISOString(),
+    device: 'MacBook Pro',
+    retryCount: 0,
+    maxRetries: 3,
+  },
+  {
+    id: 'lft-4',
+    fileId: 'lf4',
+    fileName: '设计资源包.psd',
+    filePath: '/design/设计资源包.psd',
+    size: 3221225472,
+    uploaded: 3221225472,
+    status: 'completed',
+    speed: 0,
+    startTime: new Date(now.getTime() - 2 * 3600000).toISOString(),
+    device: 'MacBook Pro',
+    retryCount: 0,
+    maxRetries: 3,
+  },
+  {
+    id: 'lft-5',
+    fileId: 'lf5',
+    fileName: '虚拟机镜像.iso',
+    filePath: '/vm/虚拟机镜像.iso',
+    size: 8589934592,
+    uploaded: 4294967296,
+    status: 'failed',
+    speed: 0,
+    startTime: new Date(now.getTime() - 1 * 3600000).toISOString(),
+    errorMessage: '网络连接超时，请检查网络后重试',
+    device: 'MacBook Pro',
+    retryCount: 1,
+    maxRetries: 3,
+  },
+];
+
 const mockRecycleBin: RecycleBinItem[] = [
   {
     id: 'rb1',
@@ -148,7 +223,7 @@ const getShareTokenFromPath = (): string | null => {
 };
 
 const App: React.FC = () => {
-  const [tab, setTab] = useState<'activity' | 'files' | 'devices' | 'conflicts' | 'recyclebin' | 'schedule'>('activity');
+  const [tab, setTab] = useState<'activity' | 'files' | 'devices' | 'conflicts' | 'recyclebin' | 'schedule' | 'largetransfers'>('activity');
   const [shareToken, setShareToken] = useState<string | null>(getShareTokenFromPath());
   const {
     files,
@@ -160,6 +235,7 @@ const App: React.FC = () => {
     scheduleExecutions,
     shareLinksPanelOpen,
     shareLinksPanelFileId,
+    largeFileTransfers,
     setFiles,
     setActivities,
     setRecycleBin,
@@ -180,6 +256,11 @@ const App: React.FC = () => {
     restoreVersion,
     openShareLinksPanel,
     closeShareLinksPanel,
+    setLargeFileTransfers,
+    pauseLargeFileTransfer,
+    resumeLargeFileTransfer,
+    retryLargeFileTransfer,
+    cancelLargeFileTransfer,
   } = useSyncStore();
 
   useEffect(() => {
@@ -196,7 +277,8 @@ const App: React.FC = () => {
     if (recycleBin.length === 0) setRecycleBin(mockRecycleBin);
     if (devices.length === 0) setDevices(mockDevices);
     if (schedules.length === 0) setSchedules(mockSchedules);
-  }, [files.length, activities.length, recycleBin.length, devices.length, schedules.length, setFiles, setActivities, setRecycleBin, setDevices, setSchedules]);
+    if (largeFileTransfers.length === 0) setLargeFileTransfers(mockLargeFileTransfers);
+  }, [files.length, activities.length, recycleBin.length, devices.length, schedules.length, largeFileTransfers.length, setFiles, setActivities, setRecycleBin, setDevices, setSchedules, setLargeFileTransfers]);
 
   const displayFiles = files.length > 0 ? files : mockFiles;
   const displayActivities = activities.length > 0 ? activities : mockActivities;
@@ -204,6 +286,7 @@ const App: React.FC = () => {
   const displayDevices = devices.length > 0 ? devices : mockDevices;
   const displaySchedules = schedules.length > 0 ? schedules : mockSchedules;
   const displayExecutions = scheduleExecutions;
+  const displayLargeFileTransfers = largeFileTransfers.length > 0 ? largeFileTransfers : mockLargeFileTransfers;
 
   const selectedFile = versionHistory.fileId ? displayFiles.find(f => f.id === versionHistory.fileId) : null;
   const selectedVersions = versionHistory.selectedVersionIds && selectedFile
@@ -293,6 +376,15 @@ const App: React.FC = () => {
             onRunNow={runScheduleNow}
           />
         )}
+        {tab === 'largetransfers' && (
+          <LargeFileTransferPanel
+            transfers={displayLargeFileTransfers}
+            onPause={pauseLargeFileTransfer}
+            onResume={resumeLargeFileTransfer}
+            onRetry={retryLargeFileTransfer}
+            onCancel={cancelLargeFileTransfer}
+          />
+        )}
       </>
     );
   };
@@ -303,6 +395,7 @@ const App: React.FC = () => {
         <h2 style={{ margin: '0 0 20px', padding: '0 16px', fontSize: '16px' }}>FileSync</h2>
         {[
           { key: 'activity', label: '同步动态' },
+          { key: 'largetransfers', label: '大文件传输' },
           { key: 'schedule', label: '定时同步' },
           { key: 'files', label: 'Files' },
           { key: 'devices', label: 'Devices' },
