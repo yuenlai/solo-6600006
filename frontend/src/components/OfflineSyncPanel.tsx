@@ -5,12 +5,14 @@ interface Props {
   changes: OfflineChange[];
   progress: SyncProgress;
   isOnline: boolean;
+  isManualOfflineMode: boolean;
   onStartSync: () => void;
   onRetry: (id: string) => void;
   onRetryAll: () => void;
   onClearSynced: () => void;
   onRemove: (id: string) => void;
   onClose: () => void;
+  onToggleOfflineMode: () => void;
 }
 
 const statusConfig: Record<OfflineChangeStatus, { label: string; color: string; bg: string; icon: string }> = {
@@ -30,12 +32,14 @@ export const OfflineSyncPanel: React.FC<Props> = ({
   changes,
   progress,
   isOnline,
+  isManualOfflineMode,
   onStartSync,
   onRetry,
   onRetryAll,
   onClearSynced,
   onRemove,
   onClose,
+  onToggleOfflineMode,
 }) => {
   const [filter, setFilter] = useState<OfflineChangeStatus | 'all'>('all');
 
@@ -90,41 +94,71 @@ export const OfflineSyncPanel: React.FC<Props> = ({
       <div style={{
         padding: '16px 20px',
         borderBottom: '1px solid #e0e0e0',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
         background: '#fafafa',
       }}>
-        <div>
-          <h3 style={{ margin: 0, fontSize: '18px' }}>待同步内容</h3>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: '12px',
+        }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: '18px' }}>待同步内容</h3>
+          </div>
+          <button
+            onClick={onClose}
+            style={{
+              background: 'none',
+              border: 'none',
+              fontSize: '24px',
+              cursor: 'pointer',
+              color: '#666',
+              padding: '4px 8px',
+              borderRadius: '4px',
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = '#f0f0f0'}
+            onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+          >
+            ×
+          </button>
+        </div>
+        <div style={{
+          padding: '10px 12px',
+          borderRadius: '8px',
+          background: isOnline ? 'rgba(76, 175, 80, 0.1)' : 'rgba(244, 67, 54, 0.1)',
+          border: `1px solid ${isOnline ? 'rgba(76, 175, 80, 0.3)' : 'rgba(244, 67, 54, 0.3)'}`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{
-              width: '8px',
-              height: '8px',
+              width: '10px',
+              height: '10px',
               borderRadius: '50%',
               background: isOnline ? '#4caf50' : '#f44336',
+              boxShadow: isOnline ? '0 0 8px #4caf50' : '0 0 8px #f44336',
             }} />
-            <span style={{ fontSize: '13px', color: '#666' }}>
-              {isOnline ? '网络已连接' : '网络已断开 - 变更将暂存本地'}
+            <span style={{ fontSize: '13px', color: isOnline ? '#2e7d32' : '#c62828', fontWeight: 500 }}>
+              {isManualOfflineMode ? '🔌 离线模式 (手动)' : isOnline ? '🌐 网络已连接' : '📴 网络已断开'}
             </span>
           </div>
+          <button
+            onClick={onToggleOfflineMode}
+            style={{
+              padding: '6px 12px',
+              borderRadius: '6px',
+              border: 'none',
+              background: isOnline ? '#f44336' : '#4caf50',
+              color: '#fff',
+              cursor: 'pointer',
+              fontSize: '12px',
+              fontWeight: 500,
+            }}
+          >
+            {isOnline ? '🔌 切换离线' : '▶️ 恢复联网'}
+          </button>
         </div>
-        <button
-          onClick={onClose}
-          style={{
-            background: 'none',
-            border: 'none',
-            fontSize: '24px',
-            cursor: 'pointer',
-            color: '#666',
-            padding: '4px 8px',
-            borderRadius: '4px',
-          }}
-          onMouseEnter={(e) => e.currentTarget.style.background = '#f0f0f0'}
-          onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-        >
-          ×
-        </button>
       </div>
 
       <div style={{

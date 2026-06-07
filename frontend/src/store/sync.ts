@@ -180,6 +180,7 @@ interface SyncState {
   offlineSyncProgress: SyncProgress;
   isOfflinePanelOpen: boolean;
   isOnline: boolean;
+  isManualOfflineMode: boolean;
   setFiles: (files: SyncFile[]) => void;
   setConflicts: (conflicts: SyncConflict[]) => void;
   resolveConflict: (id: string, resolution: 'local' | 'remote' | 'merge') => void;
@@ -237,6 +238,8 @@ interface SyncState {
   retryAllFailedOfflineChanges: () => void;
   clearSyncedOfflineChanges: () => void;
   toggleOfflinePanel: () => void;
+  toggleManualOfflineMode: () => void;
+  setManualOfflineMode: (enabled: boolean) => void;
 }
 
 export const useSyncStore = create<SyncState>((set, get) => ({
@@ -254,6 +257,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
   },
   isOfflinePanelOpen: false,
   isOnline: true,
+  isManualOfflineMode: false,
   versionHistory: {
     isOpen: false,
     fileId: null,
@@ -763,5 +767,22 @@ export const useSyncStore = create<SyncState>((set, get) => ({
 
   toggleOfflinePanel: () => {
     set((state) => ({ isOfflinePanelOpen: !state.isOfflinePanelOpen }));
+  },
+
+  toggleManualOfflineMode: () => {
+    set((state) => {
+      const newMode = !state.isManualOfflineMode;
+      return {
+        isManualOfflineMode: newMode,
+        isOnline: newMode ? false : navigator.onLine,
+      };
+    });
+  },
+
+  setManualOfflineMode: (enabled) => {
+    set({
+      isManualOfflineMode: enabled,
+      isOnline: enabled ? false : navigator.onLine,
+    });
   },
 }));

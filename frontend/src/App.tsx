@@ -251,6 +251,8 @@ const App: React.FC = () => {
   const offlineSyncProgress = useSyncStore(state => state.offlineSyncProgress);
   const isOfflinePanelOpen = useSyncStore(state => state.isOfflinePanelOpen);
   const isOnlineStore = useSyncStore(state => state.isOnline);
+  const isManualOfflineMode = useSyncStore(state => state.isManualOfflineMode);
+  const toggleManualOfflineMode = useSyncStore(state => state.toggleManualOfflineMode);
   
   const setFiles = useSyncStore(state => state.setFiles);
   const setActivities = useSyncStore(state => state.setActivities);
@@ -307,11 +309,13 @@ const App: React.FC = () => {
   }, [setFiles, setActivities, setRecycleBin, setDevices, setSchedules, setLargeFileTransfers, loadOfflineChanges]);
 
   useEffect(() => {
-    setIsOnline(networkStatus.isOnline);
-  }, [networkStatus.isOnline, setIsOnline]);
+    if (!isManualOfflineMode) {
+      setIsOnline(networkStatus.isOnline);
+    }
+  }, [networkStatus.isOnline, setIsOnline, isManualOfflineMode]);
 
   useEffect(() => {
-    if (networkStatus.isOnline) {
+    if (isOnlineStore) {
       const pendingCount = offlineChanges.filter(c => c.status === 'pending' || c.status === 'failed').length;
       if (pendingCount > 0 && !offlineSyncProgress.isSyncing) {
         setTimeout(() => {
@@ -319,7 +323,7 @@ const App: React.FC = () => {
         }, 1000);
       }
     }
-  }, [networkStatus.isOnline]);
+  }, [isOnlineStore]);
 
   const displayFiles = files.length > 0 ? files : mockFiles;
   const displayActivities = activities.length > 0 ? activities : mockActivities;
@@ -526,62 +530,105 @@ const App: React.FC = () => {
           }}>{t.label}</button>
         ))}
         <div style={{ marginTop: 'auto', padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-          <button
-            onClick={toggleOfflinePanel}
-            style={{
-              width: '100%',
-              padding: '10px 12px',
-              borderRadius: '6px',
-              border: 'none',
-              background: isOnlineStore ? '#1976d2' : '#f44336',
-              color: '#fff',
-              cursor: 'pointer',
-              fontSize: '13px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-            }}
-          >
-            <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{
-                width: '8px',
-                height: '8px',
-                borderRadius: '50%',
-                background: isOnlineStore ? '#4caf50' : '#ffcdd2',
-                boxShadow: isOnlineStore ? '0 0 8px #4caf50' : 'none',
-              }} />
-              {isOnlineStore ? '在线' : '离线'}
-            </span>
-            {pendingOfflineCount > 0 && (
-              <span style={{
-                background: 'rgba(255,255,255,0.2)',
-                padding: '2px 8px',
-                borderRadius: '10px',
-                fontSize: '12px',
-              }}>
-                {pendingOfflineCount}
+          <div style={{
+            padding: '12px',
+            borderRadius: '8px',
+            background: isManualOfflineMode || !isOnlineStore ? 'rgba(244, 67, 54, 0.15)' : 'rgba(76, 175, 80, 0.15)',
+            marginBottom: '12px',
+            border: `1px solid ${isManualOfflineMode || !isOnlineStore ? 'rgba(244, 67, 54, 0.3)' : 'rgba(76, 175, 80, 0.3)'}`,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#fff', fontSize: '13px', fontWeight: 500 }}>
+                <span style={{
+                  width: '10px',
+                  height: '10px',
+                  borderRadius: '50%',
+                  background: isManualOfflineMode || !isOnlineStore ? '#f44336' : '#4caf50',
+                  boxShadow: isManualOfflineMode || !isOnlineStore ? '0 0 10px #f44336' : '0 0 10px #4caf50',
+                  animation: isManualOfflineMode || !isOnlineStore ? 'none' : 'pulse 2s infinite',
+                }} />
+                {isManualOfflineMode ? '🔌 离线模式 (手动)' : isOnlineStore ? '🌐 在线' : '📴 离线'}
               </span>
+              <button
+                onClick={toggleOfflinePanel}
+                style={{
+                  padding: '4px 10px',
+                  borderRadius: '12px',
+                  border: 'none',
+                  background: 'rgba(255,255,255,0.2)',
+                  color: '#fff',
+                  cursor: 'pointer',
+                  fontSize: '11px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                }}
+              >
+                📋 待同步
+                {pendingOfflineCount > 0 && (
+                  <span style={{
+                    background: '#ff9800',
+                    color: '#fff',
+                    padding: '1px 6px',
+                    borderRadius: '8px',
+                    fontSize: '10px',
+                    fontWeight: 'bold',
+                  }}>
+                    {pendingOfflineCount}
+                  </span>
+                )}
+              </button>
+            </div>
+            <button
+              onClick={toggleManualOfflineMode}
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                borderRadius: '6px',
+                border: 'none',
+                background: isManualOfflineMode ? '#4caf50' : '#f44336',
+                color: '#fff',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: 500,
+                transition: 'all 0.2s ease',
+              }}
+            >
+              {isManualOfflineMode ? '▶️ 恢复联网' : '🔌 切换到离线模式'}
+            </button>
+            {isManualOfflineMode && (
+              <p style={{ margin: '8px 0 0', fontSize: '11px', color: '#ffccbc', textAlign: 'center' }}>
+                所有操作将暂存本地，恢复联网后自动同步
+              </p>
             )}
-          </button>
-          <div style={{ marginTop: '12px' }}>
+          </div>
+
+          <div>
             <p style={{ margin: '0 0 8px', fontSize: '12px', color: '#90a4ae' }}>
-              {isOnlineStore ? '💡 请先断开网络模拟离线' : '📡 模拟离线编辑:'}
+              {!isOnlineStore ? '📡 离线编辑操作:' : '💡 请先切换到离线模式'}
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               <button
                 onClick={() => simulateFileEdit('modify')}
                 disabled={isOnlineStore}
-                title={isOnlineStore ? '请先断开网络后再试' : ''}
+                title={isOnlineStore ? '请先切换到离线模式' : ''}
                 style={{
-                  padding: '6px 10px',
-                  borderRadius: '4px',
+                  padding: '8px 12px',
+                  borderRadius: '6px',
                   border: '1px solid rgba(255,255,255,0.2)',
-                  background: isOnlineStore ? 'rgba(255,255,255,0.05)' : 'transparent',
-                  color: isOnlineStore ? '#546e7a' : '#fff',
-                  cursor: isOnlineStore ? 'not-allowed' : 'pointer',
-                  fontSize: '12px',
+                  background: !isOnlineStore ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.05)',
+                  color: !isOnlineStore ? '#fff' : '#546e7a',
+                  cursor: !isOnlineStore ? 'pointer' : 'not-allowed',
+                  fontSize: '13px',
                   textAlign: 'left',
-                  opacity: isOnlineStore ? 0.6 : 1,
+                  opacity: isOnlineStore ? 0.5 : 1,
+                  transition: 'all 0.2s ease',
+                }}
+                onMouseEnter={(e) => {
+                  if (!isOnlineStore) e.currentTarget.style.background = 'rgba(255,255,255,0.15)';
+                }}
+                onMouseLeave={(e) => {
+                  if (!isOnlineStore) e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
                 }}
               >
                 📝 修改文件
@@ -589,17 +636,24 @@ const App: React.FC = () => {
               <button
                 onClick={() => simulateFileEdit('upload')}
                 disabled={isOnlineStore}
-                title={isOnlineStore ? '请先断开网络后再试' : ''}
+                title={isOnlineStore ? '请先切换到离线模式' : ''}
                 style={{
-                  padding: '6px 10px',
-                  borderRadius: '4px',
+                  padding: '8px 12px',
+                  borderRadius: '6px',
                   border: '1px solid rgba(255,255,255,0.2)',
-                  background: isOnlineStore ? 'rgba(255,255,255,0.05)' : 'transparent',
-                  color: isOnlineStore ? '#546e7a' : '#fff',
-                  cursor: isOnlineStore ? 'not-allowed' : 'pointer',
-                  fontSize: '12px',
+                  background: !isOnlineStore ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.05)',
+                  color: !isOnlineStore ? '#fff' : '#546e7a',
+                  cursor: !isOnlineStore ? 'pointer' : 'not-allowed',
+                  fontSize: '13px',
                   textAlign: 'left',
-                  opacity: isOnlineStore ? 0.6 : 1,
+                  opacity: isOnlineStore ? 0.5 : 1,
+                  transition: 'all 0.2s ease',
+                }}
+                onMouseEnter={(e) => {
+                  if (!isOnlineStore) e.currentTarget.style.background = 'rgba(255,255,255,0.15)';
+                }}
+                onMouseLeave={(e) => {
+                  if (!isOnlineStore) e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
                 }}
               >
                 ⬆️ 上传新文件
@@ -607,17 +661,24 @@ const App: React.FC = () => {
               <button
                 onClick={() => simulateFileEdit('delete')}
                 disabled={isOnlineStore}
-                title={isOnlineStore ? '请先断开网络后再试' : ''}
+                title={isOnlineStore ? '请先切换到离线模式' : ''}
                 style={{
-                  padding: '6px 10px',
-                  borderRadius: '4px',
+                  padding: '8px 12px',
+                  borderRadius: '6px',
                   border: '1px solid rgba(255,255,255,0.2)',
-                  background: isOnlineStore ? 'rgba(255,255,255,0.05)' : 'transparent',
-                  color: isOnlineStore ? '#546e7a' : '#fff',
-                  cursor: isOnlineStore ? 'not-allowed' : 'pointer',
-                  fontSize: '12px',
+                  background: !isOnlineStore ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.05)',
+                  color: !isOnlineStore ? '#fff' : '#546e7a',
+                  cursor: !isOnlineStore ? 'pointer' : 'not-allowed',
+                  fontSize: '13px',
                   textAlign: 'left',
-                  opacity: isOnlineStore ? 0.6 : 1,
+                  opacity: isOnlineStore ? 0.5 : 1,
+                  transition: 'all 0.2s ease',
+                }}
+                onMouseEnter={(e) => {
+                  if (!isOnlineStore) e.currentTarget.style.background = 'rgba(255,255,255,0.15)';
+                }}
+                onMouseLeave={(e) => {
+                  if (!isOnlineStore) e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
                 }}
               >
                 🗑️ 删除文件
@@ -625,18 +686,25 @@ const App: React.FC = () => {
               <button
                 onClick={simulateBatchEdits}
                 disabled={isOnlineStore}
-                title={isOnlineStore ? '请先断开网络后再试' : ''}
+                title={isOnlineStore ? '请先切换到离线模式' : ''}
                 style={{
-                  padding: '6px 10px',
-                  borderRadius: '4px',
+                  padding: '8px 12px',
+                  borderRadius: '6px',
                   border: '1px solid rgba(255,255,255,0.2)',
-                  background: isOnlineStore ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.1)',
-                  color: isOnlineStore ? '#546e7a' : '#fff',
-                  cursor: isOnlineStore ? 'not-allowed' : 'pointer',
-                  fontSize: '12px',
+                  background: !isOnlineStore ? '#1976d2' : 'rgba(255,255,255,0.05)',
+                  color: !isOnlineStore ? '#fff' : '#546e7a',
+                  cursor: !isOnlineStore ? 'pointer' : 'not-allowed',
+                  fontSize: '13px',
                   textAlign: 'left',
-                  fontWeight: 500,
-                  opacity: isOnlineStore ? 0.6 : 1,
+                  fontWeight: 600,
+                  opacity: isOnlineStore ? 0.5 : 1,
+                  transition: 'all 0.2s ease',
+                }}
+                onMouseEnter={(e) => {
+                  if (!isOnlineStore) e.currentTarget.style.background = '#1565c0';
+                }}
+                onMouseLeave={(e) => {
+                  if (!isOnlineStore) e.currentTarget.style.background = '#1976d2';
                 }}
               >
                 📦 批量操作 (5个)
@@ -654,12 +722,14 @@ const App: React.FC = () => {
           changes={offlineChanges}
           progress={offlineSyncProgress}
           isOnline={isOnlineStore}
+          isManualOfflineMode={isManualOfflineMode}
           onStartSync={startOfflineSync}
           onRetry={retryOfflineChange}
           onRetryAll={retryAllFailedOfflineChanges}
           onClearSynced={clearSyncedOfflineChanges}
           onRemove={removeOfflineChange}
           onClose={toggleOfflinePanel}
+          onToggleOfflineMode={toggleManualOfflineMode}
         />
       )}
     </div>
