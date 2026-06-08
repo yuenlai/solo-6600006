@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { SyncFile, SyncFolder, Device, SyncConflict, SyncActivity, FileVersion, RecycleBinItem, RestoreResult, DeviceWizardData, SpaceValidationResult, SyncSchedule, ScheduleExecution, ShareLink, LargeFileTransferItem, StorageAnalysisData, OfflineChange, SyncProgress, DirectorySnapshot, RestoreSnapshotResult, SelectiveRestoreSnapshotResult, SnapshotFileItem, IgnoreRule, IgnoreRuleMatchResult, Notification, Workspace, WorkspaceMember, WorkspaceFileActivity, WorkspaceRole } from '../types';
+import { SyncFile, SyncFolder, Device, SyncConflict, SyncActivity, FileVersion, RecycleBinItem, RestoreResult, DeviceWizardData, SpaceValidationResult, SyncSchedule, ScheduleExecution, ShareLink, LargeFileTransferItem, StorageAnalysisData, OfflineChange, SyncProgress, DirectorySnapshot, RestoreSnapshotResult, SelectiveRestoreSnapshotResult, SnapshotFileItem, IgnoreRule, IgnoreRuleMatchResult, Notification, Workspace, WorkspaceMember, WorkspaceFileActivity, WorkspaceRole, BandwidthStrategy } from '../types';
 import { offlineStorage } from '../utils/offlineStorage';
 
 const now = new Date();
@@ -64,6 +64,57 @@ const mockIgnoreRules: IgnoreRule[] = [
     enabled: true,
     createdAt: new Date(now.getTime() - 7 * 86400000).toISOString(),
     updatedAt: new Date(now.getTime() - 7 * 86400000).toISOString(),
+  },
+];
+
+const mockBandwidthStrategies: BandwidthStrategy[] = [
+  {
+    id: 'bw-1',
+    deviceId: 'd1',
+    deviceName: 'MacBook Pro',
+    networkType: 'wifi',
+    foregroundLimit: { upload: 0, download: 0 },
+    backgroundLimit: { upload: 5120, download: 10240 },
+    enabled: true,
+    backgroundTimeRange: { start: '22:00', end: '08:00' },
+    createdAt: new Date(now.getTime() - 14 * 86400000).toISOString(),
+    updatedAt: new Date(now.getTime() - 2 * 86400000).toISOString(),
+  },
+  {
+    id: 'bw-2',
+    deviceId: 'd1',
+    deviceName: 'MacBook Pro',
+    networkType: 'cellular',
+    foregroundLimit: { upload: 1024, download: 2048 },
+    backgroundLimit: { upload: 256, download: 512 },
+    enabled: true,
+    backgroundTimeRange: { start: '23:00', end: '07:00' },
+    createdAt: new Date(now.getTime() - 10 * 86400000).toISOString(),
+    updatedAt: new Date(now.getTime() - 5 * 86400000).toISOString(),
+  },
+  {
+    id: 'bw-3',
+    deviceId: 'd2',
+    deviceName: 'Ubuntu Server',
+    networkType: 'ethernet',
+    foregroundLimit: { upload: 0, download: 0 },
+    backgroundLimit: { upload: 0, download: 0 },
+    enabled: true,
+    backgroundTimeRange: { start: '20:00', end: '06:00' },
+    createdAt: new Date(now.getTime() - 20 * 86400000).toISOString(),
+    updatedAt: new Date(now.getTime() - 1 * 86400000).toISOString(),
+  },
+  {
+    id: 'bw-4',
+    deviceId: 'd3',
+    deviceName: 'Windows Desktop',
+    networkType: 'wifi',
+    foregroundLimit: { upload: 5120, download: 10240 },
+    backgroundLimit: { upload: 1024, download: 2048 },
+    enabled: false,
+    backgroundTimeRange: { start: '22:00', end: '08:00' },
+    createdAt: new Date(now.getTime() - 7 * 86400000).toISOString(),
+    updatedAt: new Date(now.getTime() - 3 * 86400000).toISOString(),
   },
 ];
 
@@ -439,6 +490,12 @@ interface SyncState {
   addWorkspaceActivity: (workspaceId: string, activity: Omit<WorkspaceFileActivity, 'id' | 'timestamp'>) => void;
   openCreateWorkspaceModal: () => void;
   closeCreateWorkspaceModal: () => void;
+  bandwidthStrategies: BandwidthStrategy[];
+  setBandwidthStrategies: (strategies: BandwidthStrategy[]) => void;
+  addBandwidthStrategy: (strategy: Omit<BandwidthStrategy, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  updateBandwidthStrategy: (id: string, updates: Partial<BandwidthStrategy>) => void;
+  deleteBandwidthStrategy: (id: string) => void;
+  toggleBandwidthStrategy: (id: string) => void;
 }
 
 export const useSyncStore = create<SyncState>((set, get) => ({
@@ -465,6 +522,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
   selectedWorkspaceId: null,
   isCreateWorkspaceModalOpen: false,
   workspaceActivities: [...mockWorkspaceActivities],
+  bandwidthStrategies: [...mockBandwidthStrategies],
   versionHistory: {
     isOpen: false,
     fileId: null,
@@ -1441,4 +1499,35 @@ export const useSyncStore = create<SyncState>((set, get) => ({
   openCreateWorkspaceModal: () => set({ isCreateWorkspaceModalOpen: true }),
 
   closeCreateWorkspaceModal: () => set({ isCreateWorkspaceModalOpen: false }),
+
+  setBandwidthStrategies: (strategies) => set({ bandwidthStrategies: strategies }),
+
+  addBandwidthStrategy: (strategy) => {
+    const nowStr = new Date().toISOString();
+    const newStrategy: BandwidthStrategy = {
+      ...strategy,
+      id: `bw-${Date.now()}`,
+      createdAt: nowStr,
+      updatedAt: nowStr,
+    };
+    set((state) => ({
+      bandwidthStrategies: [...state.bandwidthStrategies, newStrategy],
+    }));
+  },
+
+  updateBandwidthStrategy: (id, updates) => set((state) => ({
+    bandwidthStrategies: state.bandwidthStrategies.map(s =>
+      s.id === id ? { ...s, ...updates, updatedAt: new Date().toISOString() } : s
+    ),
+  })),
+
+  deleteBandwidthStrategy: (id) => set((state) => ({
+    bandwidthStrategies: state.bandwidthStrategies.filter(s => s.id !== id),
+  })),
+
+  toggleBandwidthStrategy: (id) => set((state) => ({
+    bandwidthStrategies: state.bandwidthStrategies.map(s =>
+      s.id === id ? { ...s, enabled: !s.enabled, updatedAt: new Date().toISOString() } : s
+    ),
+  })),
 }));

@@ -17,6 +17,7 @@ import { DirectorySnapshotPanel } from './components/DirectorySnapshotPanel';
 import { IgnoreRulesPanel } from './components/IgnoreRulesPanel';
 import { DeviceHealthPanel } from './components/DeviceHealthPanel';
 import { NotificationCenter } from './components/NotificationCenter';
+import { BandwidthStrategyPanel } from './components/BandwidthStrategyPanel';
 import { WorkspacePanel } from './components/WorkspacePanel';
 import { useSyncStore } from './store/sync';
 import { useNetworkStatus } from './hooks/useNetworkStatus';
@@ -271,7 +272,7 @@ const getShareTokenFromPath = (): string | null => {
 };
 
 const App: React.FC = () => {
-  const [tab, setTab] = useState<'activity' | 'files' | 'devices' | 'health' | 'conflicts' | 'recyclebin' | 'schedule' | 'largetransfers' | 'storage' | 'snapshots' | 'ignorerules' | 'workspaces'>('workspaces');
+  const [tab, setTab] = useState<'activity' | 'files' | 'devices' | 'health' | 'conflicts' | 'recyclebin' | 'schedule' | 'largetransfers' | 'storage' | 'snapshots' | 'ignorerules' | 'bandwidth' | 'workspaces'>('workspaces');
   const [shareToken, setShareToken] = useState<string | null>(getShareTokenFromPath());
   
   const networkStatus = useNetworkStatus();
@@ -365,6 +366,12 @@ const App: React.FC = () => {
   const deleteIgnoreRule = useSyncStore(state => state.deleteIgnoreRule);
   const toggleIgnoreRule = useSyncStore(state => state.toggleIgnoreRule);
   const checkFileIgnored = useSyncStore(state => state.checkFileIgnored);
+
+  const bandwidthStrategies = useSyncStore(state => state.bandwidthStrategies);
+  const addBandwidthStrategy = useSyncStore(state => state.addBandwidthStrategy);
+  const updateBandwidthStrategy = useSyncStore(state => state.updateBandwidthStrategy);
+  const deleteBandwidthStrategy = useSyncStore(state => state.deleteBandwidthStrategy);
+  const toggleBandwidthStrategy = useSyncStore(state => state.toggleBandwidthStrategy);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -682,6 +689,16 @@ const App: React.FC = () => {
             onCheckFile={checkFileIgnored}
           />
         )}
+        {tab === 'bandwidth' && (
+          <BandwidthStrategyPanel
+            strategies={bandwidthStrategies}
+            devices={displayDevices}
+            onAddStrategy={addBandwidthStrategy}
+            onUpdateStrategy={updateBandwidthStrategy}
+            onDeleteStrategy={deleteBandwidthStrategy}
+            onToggleStrategy={toggleBandwidthStrategy}
+          />
+        )}
       </>
     );
   };
@@ -742,6 +759,7 @@ const App: React.FC = () => {
           { key: 'storage', label: '空间分析' },
           { key: 'snapshots', label: '目录快照' },
           { key: 'ignorerules', label: '忽略规则' },
+          { key: 'bandwidth', label: '带宽策略' },
           { key: 'files', label: '文件列表' },
           { key: 'devices', label: '设备管理' },
           { key: 'health', label: '健康诊断' },

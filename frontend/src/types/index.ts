@@ -414,3 +414,25 @@ export interface Workspace {
 }
 
 export type WorkspaceRole = 'owner' | 'admin' | 'editor' | 'viewer';
+
+export type NetworkType = 'wifi' | 'ethernet' | 'cellular' | 'unknown';
+
+export type UsageMode = 'foreground' | 'background';
+
+export interface BandwidthLimit {
+  upload: number;
+  download: number;
+}
+
+export interface BandwidthStrategy {
+  id: string;
+  deviceId: string;
+  deviceName: string;
+  networkType: NetworkType;
+  foregroundLimit: BandwidthLimit;
+  backgroundLimit: BandwidthLimit;
+  enabled: boolean;
+  backgroundTimeRange: TimeRange;
+  createdAt: string;
+  updatedAt: string;
+}
