@@ -89,7 +89,7 @@ export interface RestoreResult {
   item?: RecycleBinItem;
 }
 
-export type WizardStep = 'name' | 'space' | 'directory' | 'permissions';
+export type WizardStep = 'template' | 'name' | 'space' | 'directory' | 'permissions';
 
 export interface DeviceWizardData {
   name: string;
@@ -433,6 +433,22 @@ export interface BandwidthStrategy {
   backgroundLimit: BandwidthLimit;
   enabled: boolean;
   backgroundTimeRange: TimeRange;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SyncTemplate {
+  id: string;
+  name: string;
+  description?: string;
+  platform: string;
+  syncDirectories: string[];
+  permissions: {
+    readFiles: boolean;
+    writeFiles: boolean;
+    deleteFiles: boolean;
+    autoSync: boolean;
+  };
   createdAt: string;
   updatedAt: string;
 }

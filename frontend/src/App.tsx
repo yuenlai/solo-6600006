@@ -19,6 +19,7 @@ import { DeviceHealthPanel } from './components/DeviceHealthPanel';
 import { NotificationCenter } from './components/NotificationCenter';
 import { BandwidthStrategyPanel } from './components/BandwidthStrategyPanel';
 import { WorkspacePanel } from './components/WorkspacePanel';
+import { SyncTemplatePanel } from './components/SyncTemplatePanel';
 import { useSyncStore } from './store/sync';
 import { useNetworkStatus } from './hooks/useNetworkStatus';
 import { SyncFile, Device, SyncActivity, FileVersion, RecycleBinItem, SyncSchedule, LargeFileTransferItem, OfflineChangeAction, DeviceHealthMetrics, Notification, NotificationAction } from './types';
@@ -272,7 +273,7 @@ const getShareTokenFromPath = (): string | null => {
 };
 
 const App: React.FC = () => {
-  const [tab, setTab] = useState<'activity' | 'files' | 'devices' | 'health' | 'conflicts' | 'recyclebin' | 'schedule' | 'largetransfers' | 'storage' | 'snapshots' | 'ignorerules' | 'bandwidth' | 'workspaces'>('workspaces');
+  const [tab, setTab] = useState<'activity' | 'files' | 'devices' | 'health' | 'conflicts' | 'recyclebin' | 'schedule' | 'largetransfers' | 'storage' | 'snapshots' | 'ignorerules' | 'bandwidth' | 'workspaces' | 'templates'>('workspaces');
   const [shareToken, setShareToken] = useState<string | null>(getShareTokenFromPath());
   
   const networkStatus = useNetworkStatus();
@@ -372,6 +373,11 @@ const App: React.FC = () => {
   const updateBandwidthStrategy = useSyncStore(state => state.updateBandwidthStrategy);
   const deleteBandwidthStrategy = useSyncStore(state => state.deleteBandwidthStrategy);
   const toggleBandwidthStrategy = useSyncStore(state => state.toggleBandwidthStrategy);
+
+  const syncTemplates = useSyncStore(state => state.syncTemplates);
+  const addSyncTemplate = useSyncStore(state => state.addSyncTemplate);
+  const updateSyncTemplate = useSyncStore(state => state.updateSyncTemplate);
+  const deleteSyncTemplate = useSyncStore(state => state.deleteSyncTemplate);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -699,6 +705,14 @@ const App: React.FC = () => {
             onToggleStrategy={toggleBandwidthStrategy}
           />
         )}
+        {tab === 'templates' && (
+          <SyncTemplatePanel
+            templates={syncTemplates}
+            onAdd={addSyncTemplate}
+            onUpdate={updateSyncTemplate}
+            onDelete={deleteSyncTemplate}
+          />
+        )}
       </>
     );
   };
@@ -760,6 +774,7 @@ const App: React.FC = () => {
           { key: 'snapshots', label: '目录快照' },
           { key: 'ignorerules', label: '忽略规则' },
           { key: 'bandwidth', label: '带宽策略' },
+          { key: 'templates', label: '同步模板' },
           { key: 'files', label: '文件列表' },
           { key: 'devices', label: '设备管理' },
           { key: 'health', label: '健康诊断' },

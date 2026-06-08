@@ -1,21 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, Steps, Form, Input, Select, Space, Card, Checkbox, Button, Progress, Alert, List, Tag, InputNumber, Typography, message } from 'antd';
-import { PlusOutlined, DeleteOutlined, CheckCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
+import { Modal, Steps, Form, Input, Select, Space, Card, Checkbox, Button, Progress, Alert, List, Tag, InputNumber, Typography, message, Divider } from 'antd';
+import { PlusOutlined, DeleteOutlined, CheckCircleOutlined, ExclamationCircleOutlined, SaveOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { useSyncStore } from '../store/sync';
-import { WizardStep, SpaceValidationResult } from '../types';
+import { WizardStep, SpaceValidationResult, SyncTemplate } from '../types';
 
 const { Title, Text } = Typography;
 const { Step } = Steps;
 const { Option } = Select;
+const { TextArea } = Input;
 
 const stepTitles: Record<WizardStep, string> = {
+  template: '选择模板',
   name: '设备命名',
   space: '空间校验',
   directory: '同步目录',
   permissions: '权限确认',
 };
 
-const stepOrder: WizardStep[] = ['name', 'space', 'directory', 'permissions'];
+const stepOrder: WizardStep[] = ['template', 'name', 'space', 'directory', 'permissions'];
 
 const presetDirectories = [
   '/Users/Documents',
@@ -48,6 +50,9 @@ export const DeviceOnboardingWizard: React.FC = () => {
     updateOnboardingData,
     validateSpace,
     completeOnboarding,
+    syncTemplates,
+    applySyncTemplate,
+    addSyncTemplate,
   } = useSyncStore();
 
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
@@ -55,6 +60,9 @@ export const DeviceOnboardingWizard: React.FC = () => {
   const [spaceValidation, setSpaceValidation] = useState<SpaceValidationResult | null>(null);
   const [customDirectory, setCustomDirectory] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showSaveTemplateModal, setShowSaveTemplateModal] = useState(false);
+  const [saveTemplateName, setSaveTemplateName] = useState('');
+  const [saveTemplateDesc, setSaveTemplateDesc] = useState('');
 
   const currentStep = stepOrder[currentStepIndex];
 
@@ -79,25 +87,65 @@ export const DeviceOnboardingWizard: React.FC = () => {
     }
   };
 
+  const handleApplyTemplate = (template: SyncTemplate) => {
+    applySyncTemplate(template.id);
+    form.setFieldsValue({
+      platform: template.platform,
+    });
+    setCurrentStepIndex(1);
+    message.success(`已应用模板「${template.name}」，请继续填写设备信息`);
+  };
+
+  const handleSkipTemplate = () => {
+    setCurrentStepIndex(1);
+  };
+
+  const handleSaveAsTemplate = () => {
+    setSaveTemplateName('');
+    setSaveTemplateDesc('');
+    setShowSaveTemplateModal(true);
+  };
+
+  const handleConfirmSaveTemplate = () => {
+    if (!saveTemplateName.trim()) {
+      message.warning('请输入模板名称');
+      return;
+    }
+    addSyncTemplate({
+      name: saveTemplateName.trim(),
+      description: saveTemplateDesc.trim() || undefined,
+      platform: onboardingWizardData.platform,
+      syncDirectories: [...onboardingWizardData.syncDirectories],
+      permissions: { ...onboardingWizardData.permissions },
+    });
+    message.success('当前配置已保存为模板');
+    setShowSaveTemplateModal(false);
+  };
+
   const handleNext = async () => {
+    if (currentStep === 'template') {
+      goToNextStep();
+      return;
+    }
+
     if (currentStep === 'name') {
       try {
         const values = await form.validateFields(['name', 'platform', 'storageTotal', 'storageUsed']);
         const storageTotalBytes = values.storageTotal * 1024 * 1024 * 1024;
         const storageUsedBytes = values.storageUsed * 1024 * 1024 * 1024;
-        
+
         if (storageUsedBytes > storageTotalBytes) {
           message.error('已使用容量不能大于总容量');
           return;
         }
-        
+
         updateOnboardingData({
           name: values.name,
           platform: values.platform,
           storageTotal: storageTotalBytes,
           storageUsed: storageUsedBytes,
         });
-        
+
         goToNextStep();
       } catch {
         message.warning('请填写完整的设备信息');
@@ -181,7 +229,7 @@ export const DeviceOnboardingWizard: React.FC = () => {
       message.warning('请输入设备名称');
       return;
     }
-    
+
     setLoading(true);
     try {
       const newDevice = completeOnboarding();
@@ -193,6 +241,74 @@ export const DeviceOnboardingWizard: React.FC = () => {
 
   const renderStepContent = () => {
     switch (currentStep) {
+      case 'template':
+        return (
+          <div>
+            <Title level={5}>选择同步模板</Title>
+            <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
+              选择一个预设模板快速填充目录和权限配置，或跳过手动设置。
+            </Text>
+            {syncTemplates.length === 0 ? (
+              <Card style={{ textAlign: 'center', padding: 24 }}>
+                <Text type="secondary">暂无可用模板，请跳过此步骤手动配置</Text>
+              </Card>
+            ) : (
+              <List
+                dataSource={syncTemplates}
+                renderItem={(template) => {
+                  const platformInfo = platformOptions.find(p => p.value === template.platform);
+                  const permTags: { label: string; color: string }[] = [];
+                  if (template.permissions.readFiles) permTags.push({ label: '读取', color: 'green' });
+                  if (template.permissions.writeFiles) permTags.push({ label: '写入', color: 'blue' });
+                  if (template.permissions.deleteFiles) permTags.push({ label: '删除', color: 'orange' });
+                  if (template.permissions.autoSync) permTags.push({ label: '自动同步', color: 'purple' });
+
+                  return (
+                    <Card
+                      hoverable
+                      style={{ marginBottom: 12, cursor: 'pointer' }}
+                      onClick={() => handleApplyTemplate(template)}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                            <Text strong style={{ fontSize: 15 }}>{template.name}</Text>
+                            <Tag color={platformInfo?.value === 'windows' ? 'blue' : platformInfo?.value === 'mac' ? 'geekblue' : 'volcano'}>
+                              {platformInfo?.icon} {platformInfo?.label}
+                            </Tag>
+                          </div>
+                          {template.description && (
+                            <Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 13 }}>
+                              {template.description}
+                            </Text>
+                          )}
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 4 }}>
+                            {template.syncDirectories.map(dir => (
+                              <Tag key={dir} color="cyan" style={{ fontSize: 11 }}>{dir}</Tag>
+                            ))}
+                          </div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                            {permTags.map(tag => (
+                              <Tag key={tag.label} color={tag.color} style={{ fontSize: 11 }}>{tag.label}</Tag>
+                            ))}
+                          </div>
+                        </div>
+                        <Button type="primary" icon={<ThunderboltOutlined />} size="small">
+                          套用
+                        </Button>
+                      </div>
+                    </Card>
+                  );
+                }}
+              />
+            )}
+            <Divider style={{ margin: '16px 0' }} />
+            <Button type="default" block onClick={handleSkipTemplate}>
+              跳过，手动配置
+            </Button>
+          </div>
+        );
+
       case 'name':
         return (
           <Form form={form} layout="vertical" initialValues={defaultFormValues}>
@@ -405,7 +521,11 @@ export const DeviceOnboardingWizard: React.FC = () => {
                 </Checkbox>
               </Space>
             </Card>
-            <Card title="配置摘要" size="small">
+            <Card title="配置摘要" size="small" extra={
+              <Button size="small" icon={<SaveOutlined />} onClick={handleSaveAsTemplate}>
+                保存为模板
+              </Button>
+            }>
               <Space direction="vertical" size="small" style={{ width: '100%' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <Text type="secondary">设备名称</Text>
@@ -443,36 +563,95 @@ export const DeviceOnboardingWizard: React.FC = () => {
   const isLastStep = currentStepIndex === stepOrder.length - 1;
 
   return (
-    <Modal
-      title={<Title level={4} style={{ margin: 0 }}>新设备接入向导</Title>}
-      open={isOnboardingWizardOpen}
-      onCancel={closeOnboardingWizard}
-      width={640}
-      footer={null}
-      destroyOnClose
-      maskClosable={false}
-    >
-      <Steps current={currentStepIndex} size="small" style={{ marginBottom: 32 }}>
-        {stepOrder.map(step => (
-          <Step key={step} title={stepTitles[step]} />
-        ))}
-      </Steps>
-      <div style={{ minHeight: 360, marginBottom: 24 }}>
-        {renderStepContent()}
-      </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-        <Button onClick={goToPrevStep} disabled={currentStepIndex === 0}>
-          上一步
-        </Button>
-        <Button
-          type="primary"
-          onClick={handleNext}
-          loading={loading}
-          disabled={isLastStep && onboardingWizardData.syncDirectories.length === 0}
-        >
-          {isLastStep ? '完成配置' : '下一步'}
-        </Button>
-      </div>
-    </Modal>
+    <>
+      <Modal
+        title={<Title level={4} style={{ margin: 0 }}>新设备接入向导</Title>}
+        open={isOnboardingWizardOpen}
+        onCancel={closeOnboardingWizard}
+        width={640}
+        footer={null}
+        destroyOnClose
+        maskClosable={false}
+      >
+        <Steps current={currentStepIndex} size="small" style={{ marginBottom: 32 }}>
+          {stepOrder.map(step => (
+            <Step key={step} title={stepTitles[step]} />
+          ))}
+        </Steps>
+        <div style={{ minHeight: 360, marginBottom: 24 }}>
+          {renderStepContent()}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <Button onClick={goToPrevStep} disabled={currentStepIndex === 0}>
+            上一步
+          </Button>
+          <Button
+            type="primary"
+            onClick={handleNext}
+            loading={loading}
+            disabled={isLastStep && onboardingWizardData.syncDirectories.length === 0}
+          >
+            {isLastStep ? '完成配置' : '下一步'}
+          </Button>
+        </div>
+      </Modal>
+
+      <Modal
+        title="保存为模板"
+        open={showSaveTemplateModal}
+        onOk={handleConfirmSaveTemplate}
+        onCancel={() => setShowSaveTemplateModal(false)}
+        okText="保存"
+        width={440}
+      >
+        <div style={{ marginBottom: 16 }}>
+          <Text type="secondary">
+            将当前目录和权限配置保存为模板，方便后续接入新设备时快速套用。
+          </Text>
+        </div>
+        <div style={{ marginBottom: 12 }}>
+          <Text strong style={{ display: 'block', marginBottom: 4 }}>模板名称</Text>
+          <Input
+            placeholder="例如：办公电脑标准配置"
+            value={saveTemplateName}
+            onChange={e => setSaveTemplateName(e.target.value)}
+          />
+        </div>
+        <div>
+          <Text strong style={{ display: 'block', marginBottom: 4 }}>模板描述（可选）</Text>
+          <TextArea
+            rows={2}
+            placeholder="简要描述此模板的适用场景"
+            value={saveTemplateDesc}
+            onChange={e => setSaveTemplateDesc(e.target.value)}
+          />
+        </div>
+        <Card size="small" style={{ marginTop: 12, background: '#f5f5f5' }}>
+          <Space direction="vertical" size={4} style={{ width: '100%' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <Text type="secondary">适用平台</Text>
+              <Text>{platformOptions.find(p => p.value === onboardingWizardData.platform)?.label || '-'}</Text>
+            </div>
+            <div>
+              <Text type="secondary">同步目录：</Text>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+                {onboardingWizardData.syncDirectories.map(dir => (
+                  <Tag key={dir} color="cyan">{dir}</Tag>
+                ))}
+              </div>
+            </div>
+            <div>
+              <Text type="secondary">权限：</Text>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+                {onboardingWizardData.permissions.readFiles && <Tag color="green">读取</Tag>}
+                {onboardingWizardData.permissions.writeFiles && <Tag color="blue">写入</Tag>}
+                {onboardingWizardData.permissions.deleteFiles && <Tag color="orange">删除</Tag>}
+                {onboardingWizardData.permissions.autoSync && <Tag color="purple">自动同步</Tag>}
+              </div>
+            </div>
+          </Space>
+        </Card>
+      </Modal>
+    </>
   );
 };

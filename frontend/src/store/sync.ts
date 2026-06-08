@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { SyncFile, SyncFolder, Device, SyncConflict, SyncActivity, FileVersion, RecycleBinItem, RestoreResult, DeviceWizardData, SpaceValidationResult, SyncSchedule, ScheduleExecution, ShareLink, LargeFileTransferItem, StorageAnalysisData, OfflineChange, SyncProgress, DirectorySnapshot, RestoreSnapshotResult, SelectiveRestoreSnapshotResult, SnapshotFileItem, IgnoreRule, IgnoreRuleMatchResult, Notification, Workspace, WorkspaceMember, WorkspaceFileActivity, WorkspaceRole, BandwidthStrategy } from '../types';
+import { SyncFile, SyncFolder, Device, SyncConflict, SyncActivity, FileVersion, RecycleBinItem, RestoreResult, DeviceWizardData, SpaceValidationResult, SyncSchedule, ScheduleExecution, ShareLink, LargeFileTransferItem, StorageAnalysisData, OfflineChange, SyncProgress, DirectorySnapshot, RestoreSnapshotResult, SelectiveRestoreSnapshotResult, SnapshotFileItem, IgnoreRule, IgnoreRuleMatchResult, Notification, Workspace, WorkspaceMember, WorkspaceFileActivity, WorkspaceRole, BandwidthStrategy, SyncTemplate } from '../types';
 import { offlineStorage } from '../utils/offlineStorage';
 
 const now = new Date();
@@ -115,6 +115,39 @@ const mockBandwidthStrategies: BandwidthStrategy[] = [
     backgroundTimeRange: { start: '22:00', end: '08:00' },
     createdAt: new Date(now.getTime() - 7 * 86400000).toISOString(),
     updatedAt: new Date(now.getTime() - 3 * 86400000).toISOString(),
+  },
+];
+
+const mockSyncTemplates: SyncTemplate[] = [
+  {
+    id: 'tpl-1',
+    name: '办公电脑标准配置',
+    description: '适用于日常办公电脑，同步文档和图片目录，只读+写入权限',
+    platform: 'windows',
+    syncDirectories: ['/Users/Documents', '/Users/Pictures', '/Users/Desktop'],
+    permissions: { readFiles: true, writeFiles: true, deleteFiles: false, autoSync: true },
+    createdAt: new Date(now.getTime() - 20 * 86400000).toISOString(),
+    updatedAt: new Date(now.getTime() - 5 * 86400000).toISOString(),
+  },
+  {
+    id: 'tpl-2',
+    name: '开发工作站配置',
+    description: '适用于开发人员工作站，包含项目目录和完整权限',
+    platform: 'linux',
+    syncDirectories: ['/Users/Documents', '/Users/Desktop', '/Users/Downloads'],
+    permissions: { readFiles: true, writeFiles: true, deleteFiles: true, autoSync: true },
+    createdAt: new Date(now.getTime() - 15 * 86400000).toISOString(),
+    updatedAt: new Date(now.getTime() - 3 * 86400000).toISOString(),
+  },
+  {
+    id: 'tpl-3',
+    name: '媒体库精简同步',
+    description: '仅同步媒体相关目录，适合大容量存储设备',
+    platform: 'mac',
+    syncDirectories: ['/Users/Pictures', '/Users/Music', '/Users/Videos'],
+    permissions: { readFiles: true, writeFiles: false, deleteFiles: false, autoSync: false },
+    createdAt: new Date(now.getTime() - 10 * 86400000).toISOString(),
+    updatedAt: new Date(now.getTime() - 1 * 86400000).toISOString(),
   },
 ];
 
@@ -496,6 +529,12 @@ interface SyncState {
   updateBandwidthStrategy: (id: string, updates: Partial<BandwidthStrategy>) => void;
   deleteBandwidthStrategy: (id: string) => void;
   toggleBandwidthStrategy: (id: string) => void;
+  syncTemplates: SyncTemplate[];
+  setSyncTemplates: (templates: SyncTemplate[]) => void;
+  addSyncTemplate: (template: Omit<SyncTemplate, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  updateSyncTemplate: (id: string, updates: Partial<SyncTemplate>) => void;
+  deleteSyncTemplate: (id: string) => void;
+  applySyncTemplate: (templateId: string) => void;
 }
 
 export const useSyncStore = create<SyncState>((set, get) => ({
@@ -523,6 +562,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
   isCreateWorkspaceModalOpen: false,
   workspaceActivities: [...mockWorkspaceActivities],
   bandwidthStrategies: [...mockBandwidthStrategies],
+  syncTemplates: [...mockSyncTemplates],
   versionHistory: {
     isOpen: false,
     fileId: null,
@@ -1530,4 +1570,42 @@ export const useSyncStore = create<SyncState>((set, get) => ({
       s.id === id ? { ...s, enabled: !s.enabled, updatedAt: new Date().toISOString() } : s
     ),
   })),
+
+  setSyncTemplates: (templates) => set({ syncTemplates: templates }),
+
+  addSyncTemplate: (template) => {
+    const nowStr = new Date().toISOString();
+    const newTemplate: SyncTemplate = {
+      ...template,
+      id: `tpl-${Date.now()}`,
+      createdAt: nowStr,
+      updatedAt: nowStr,
+    };
+    set((state) => ({
+      syncTemplates: [...state.syncTemplates, newTemplate],
+    }));
+  },
+
+  updateSyncTemplate: (id, updates) => set((state) => ({
+    syncTemplates: state.syncTemplates.map(t =>
+      t.id === id ? { ...t, ...updates, updatedAt: new Date().toISOString() } : t
+    ),
+  })),
+
+  deleteSyncTemplate: (id) => set((state) => ({
+    syncTemplates: state.syncTemplates.filter(t => t.id !== id),
+  })),
+
+  applySyncTemplate: (templateId) => {
+    const template = get().syncTemplates.find(t => t.id === templateId);
+    if (!template) return;
+    set((state) => ({
+      onboardingWizardData: {
+        ...state.onboardingWizardData,
+        platform: template.platform,
+        syncDirectories: [...template.syncDirectories],
+        permissions: { ...template.permissions },
+      },
+    }));
+  },
 }));
