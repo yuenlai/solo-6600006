@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { SyncFile, SyncFolder, Device, SyncConflict, SyncActivity, FileVersion, RecycleBinItem, RestoreResult, DeviceWizardData, SpaceValidationResult, SyncSchedule, ScheduleExecution, ShareLink, LargeFileTransferItem, StorageAnalysisData, OfflineChange, SyncProgress, DirectorySnapshot, RestoreSnapshotResult, SelectiveRestoreSnapshotResult, SnapshotFileItem, IgnoreRule, IgnoreRuleMatchResult, Notification, Workspace, WorkspaceMember, WorkspaceFileActivity, WorkspaceRole, BandwidthStrategy, SyncTemplate } from '../types';
+import { SyncFile, SyncFolder, Device, SyncConflict, SyncActivity, FileVersion, RecycleBinItem, RestoreResult, DeviceWizardData, SpaceValidationResult, SyncSchedule, ScheduleExecution, ShareLink, LargeFileTransferItem, StorageAnalysisData, OfflineChange, SyncProgress, DirectorySnapshot, RestoreSnapshotResult, SelectiveRestoreSnapshotResult, SnapshotFileItem, IgnoreRule, IgnoreRuleMatchResult, Notification, Workspace, WorkspaceMember, WorkspaceFileActivity, WorkspaceRole, BandwidthStrategy, SyncTemplate, SensitiveProtection, ProtectionMode, ProtectionVerifyResult } from '../types';
 import { offlineStorage } from '../utils/offlineStorage';
 
 const now = new Date();
@@ -148,6 +148,50 @@ const mockSyncTemplates: SyncTemplate[] = [
     permissions: { readFiles: true, writeFiles: false, deleteFiles: false, autoSync: false },
     createdAt: new Date(now.getTime() - 10 * 86400000).toISOString(),
     updatedAt: new Date(now.getTime() - 1 * 86400000).toISOString(),
+  },
+];
+
+const mockSensitiveProtections: SensitiveProtection[] = [
+  {
+    id: 'sp-1',
+    directoryPath: '/docs',
+    directoryName: 'docs',
+    mode: 'confirm',
+    enabled: true,
+    confirmMessage: '您正在访问文档目录，确认继续操作？',
+    createdAt: new Date(now.getTime() - 20 * 86400000).toISOString(),
+    updatedAt: new Date(now.getTime() - 5 * 86400000).toISOString(),
+  },
+  {
+    id: 'sp-2',
+    directoryPath: '/backup',
+    directoryName: 'backup',
+    mode: 'password',
+    enabled: true,
+    password: 'admin123',
+    createdAt: new Date(now.getTime() - 15 * 86400000).toISOString(),
+    updatedAt: new Date(now.getTime() - 3 * 86400000).toISOString(),
+  },
+  {
+    id: 'sp-3',
+    directoryPath: '/data',
+    directoryName: 'data',
+    mode: 'recovery',
+    enabled: true,
+    recoveryQuestion: '您的第一所学校是？',
+    recoveryAnswer: '希望小学',
+    createdAt: new Date(now.getTime() - 8 * 86400000).toISOString(),
+    updatedAt: new Date(now.getTime() - 1 * 86400000).toISOString(),
+  },
+  {
+    id: 'sp-4',
+    directoryPath: '/design',
+    directoryName: 'design',
+    mode: 'confirm',
+    enabled: false,
+    confirmMessage: '设计文件目录受保护，确认继续？',
+    createdAt: new Date(now.getTime() - 5 * 86400000).toISOString(),
+    updatedAt: new Date(now.getTime() - 2 * 86400000).toISOString(),
   },
 ];
 
@@ -535,6 +579,14 @@ interface SyncState {
   updateSyncTemplate: (id: string, updates: Partial<SyncTemplate>) => void;
   deleteSyncTemplate: (id: string) => void;
   applySyncTemplate: (templateId: string) => void;
+  sensitiveProtections: SensitiveProtection[];
+  setSensitiveProtections: (protections: SensitiveProtection[]) => void;
+  addSensitiveProtection: (protection: Omit<SensitiveProtection, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  updateSensitiveProtection: (id: string, updates: Partial<SensitiveProtection>) => void;
+  deleteSensitiveProtection: (id: string) => void;
+  toggleSensitiveProtection: (id: string) => void;
+  verifyProtection: (id: string, input: string) => ProtectionVerifyResult;
+  checkDirectoryProtection: (directoryPath: string) => SensitiveProtection | null;
 }
 
 export const useSyncStore = create<SyncState>((set, get) => ({
@@ -563,6 +615,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
   workspaceActivities: [...mockWorkspaceActivities],
   bandwidthStrategies: [...mockBandwidthStrategies],
   syncTemplates: [...mockSyncTemplates],
+  sensitiveProtections: [...mockSensitiveProtections],
   versionHistory: {
     isOpen: false,
     fileId: null,
@@ -1607,5 +1660,67 @@ export const useSyncStore = create<SyncState>((set, get) => ({
         permissions: { ...template.permissions },
       },
     }));
+  },
+
+  setSensitiveProtections: (protections) => set({ sensitiveProtections: protections }),
+
+  addSensitiveProtection: (protection) => {
+    const nowStr = new Date().toISOString();
+    const newProtection: SensitiveProtection = {
+      ...protection,
+      id: `sp-${Date.now()}`,
+      createdAt: nowStr,
+      updatedAt: nowStr,
+    };
+    set((state) => ({
+      sensitiveProtections: [...state.sensitiveProtections, newProtection],
+    }));
+  },
+
+  updateSensitiveProtection: (id, updates) => set((state) => ({
+    sensitiveProtections: state.sensitiveProtections.map(p =>
+      p.id === id ? { ...p, ...updates, updatedAt: new Date().toISOString() } : p
+    ),
+  })),
+
+  deleteSensitiveProtection: (id) => set((state) => ({
+    sensitiveProtections: state.sensitiveProtections.filter(p => p.id !== id),
+  })),
+
+  toggleSensitiveProtection: (id) => set((state) => ({
+    sensitiveProtections: state.sensitiveProtections.map(p =>
+      p.id === id ? { ...p, enabled: !p.enabled, updatedAt: new Date().toISOString() } : p
+    ),
+  })),
+
+  verifyProtection: (id, input) => {
+    const protection = get().sensitiveProtections.find(p => p.id === id);
+    if (!protection) {
+      return { verified: false, message: '保护规则不存在' };
+    }
+    if (!protection.enabled) {
+      return { verified: true, message: '保护已禁用，无需验证' };
+    }
+    switch (protection.mode) {
+      case 'confirm':
+        return { verified: true, message: '已确认操作' };
+      case 'password':
+        if (input === protection.password) {
+          return { verified: true, message: '口令验证通过' };
+        }
+        return { verified: false, message: '访问口令错误' };
+      case 'recovery':
+        if (input === protection.recoveryAnswer) {
+          return { verified: true, message: '恢复校验通过' };
+        }
+        return { verified: false, message: '恢复答案错误' };
+      default:
+        return { verified: false, message: '未知的保护模式' };
+    }
+  },
+
+  checkDirectoryProtection: (directoryPath) => {
+    const protections = get().sensitiveProtections;
+    return protections.find(p => p.directoryPath === directoryPath && p.enabled) || null;
   },
 }));

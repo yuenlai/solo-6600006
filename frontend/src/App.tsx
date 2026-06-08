@@ -20,6 +20,7 @@ import { NotificationCenter } from './components/NotificationCenter';
 import { BandwidthStrategyPanel } from './components/BandwidthStrategyPanel';
 import { WorkspacePanel } from './components/WorkspacePanel';
 import { SyncTemplatePanel } from './components/SyncTemplatePanel';
+import { SensitiveProtectionPanel } from './components/SensitiveProtectionPanel';
 import { useSyncStore } from './store/sync';
 import { useNetworkStatus } from './hooks/useNetworkStatus';
 import { SyncFile, Device, SyncActivity, FileVersion, RecycleBinItem, SyncSchedule, LargeFileTransferItem, OfflineChangeAction, DeviceHealthMetrics, Notification, NotificationAction } from './types';
@@ -273,7 +274,7 @@ const getShareTokenFromPath = (): string | null => {
 };
 
 const App: React.FC = () => {
-  const [tab, setTab] = useState<'activity' | 'files' | 'devices' | 'health' | 'conflicts' | 'recyclebin' | 'schedule' | 'largetransfers' | 'storage' | 'snapshots' | 'ignorerules' | 'bandwidth' | 'workspaces' | 'templates'>('workspaces');
+  const [tab, setTab] = useState<'activity' | 'files' | 'devices' | 'health' | 'conflicts' | 'recyclebin' | 'schedule' | 'largetransfers' | 'storage' | 'snapshots' | 'ignorerules' | 'bandwidth' | 'workspaces' | 'templates' | 'sensitive'>('workspaces');
   const [shareToken, setShareToken] = useState<string | null>(getShareTokenFromPath());
   
   const networkStatus = useNetworkStatus();
@@ -378,6 +379,13 @@ const App: React.FC = () => {
   const addSyncTemplate = useSyncStore(state => state.addSyncTemplate);
   const updateSyncTemplate = useSyncStore(state => state.updateSyncTemplate);
   const deleteSyncTemplate = useSyncStore(state => state.deleteSyncTemplate);
+
+  const sensitiveProtections = useSyncStore(state => state.sensitiveProtections);
+  const addSensitiveProtection = useSyncStore(state => state.addSensitiveProtection);
+  const updateSensitiveProtection = useSyncStore(state => state.updateSensitiveProtection);
+  const deleteSensitiveProtection = useSyncStore(state => state.deleteSensitiveProtection);
+  const toggleSensitiveProtection = useSyncStore(state => state.toggleSensitiveProtection);
+  const verifyProtection = useSyncStore(state => state.verifyProtection);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -713,6 +721,17 @@ const App: React.FC = () => {
             onDelete={deleteSyncTemplate}
           />
         )}
+        {tab === 'sensitive' && (
+          <SensitiveProtectionPanel
+            protections={sensitiveProtections}
+            directories={storageAnalysis.byDirectory.map(d => ({ path: d.path, name: d.name }))}
+            onAddProtection={addSensitiveProtection}
+            onUpdateProtection={updateSensitiveProtection}
+            onDeleteProtection={deleteSensitiveProtection}
+            onToggleProtection={toggleSensitiveProtection}
+            onVerifyProtection={verifyProtection}
+          />
+        )}
       </>
     );
   };
@@ -773,6 +792,7 @@ const App: React.FC = () => {
           { key: 'storage', label: '空间分析' },
           { key: 'snapshots', label: '目录快照' },
           { key: 'ignorerules', label: '忽略规则' },
+          { key: 'sensitive', label: '敏感保护' },
           { key: 'bandwidth', label: '带宽策略' },
           { key: 'templates', label: '同步模板' },
           { key: 'files', label: '文件列表' },

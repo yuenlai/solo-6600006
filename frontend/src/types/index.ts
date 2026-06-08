@@ -452,3 +452,24 @@ export interface SyncTemplate {
   createdAt: string;
   updatedAt: string;
 }
+
+export type ProtectionMode = 'confirm' | 'password' | 'recovery';
+
+export interface SensitiveProtection {
+  id: string;
+  directoryPath: string;
+  directoryName: string;
+  mode: ProtectionMode;
+  enabled: boolean;
+  password?: string;
+  recoveryQuestion?: string;
+  recoveryAnswer?: string;
+  confirmMessage?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProtectionVerifyResult {
+  verified: boolean;
+  message: string;
+}
