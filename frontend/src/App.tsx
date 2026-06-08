@@ -21,6 +21,7 @@ import { BandwidthStrategyPanel } from './components/BandwidthStrategyPanel';
 import { WorkspacePanel } from './components/WorkspacePanel';
 import { SyncTemplatePanel } from './components/SyncTemplatePanel';
 import { SensitiveProtectionPanel } from './components/SensitiveProtectionPanel';
+import { DailySyncReportPanel } from './components/DailySyncReportPanel';
 import { useSyncStore } from './store/sync';
 import { useNetworkStatus } from './hooks/useNetworkStatus';
 import { SyncFile, Device, SyncActivity, FileVersion, RecycleBinItem, SyncSchedule, LargeFileTransferItem, OfflineChangeAction, DeviceHealthMetrics, Notification, NotificationAction } from './types';
@@ -274,7 +275,7 @@ const getShareTokenFromPath = (): string | null => {
 };
 
 const App: React.FC = () => {
-  const [tab, setTab] = useState<'activity' | 'files' | 'devices' | 'health' | 'conflicts' | 'recyclebin' | 'schedule' | 'largetransfers' | 'storage' | 'snapshots' | 'ignorerules' | 'bandwidth' | 'workspaces' | 'templates' | 'sensitive'>('workspaces');
+  const [tab, setTab] = useState<'activity' | 'files' | 'devices' | 'health' | 'conflicts' | 'recyclebin' | 'schedule' | 'largetransfers' | 'storage' | 'snapshots' | 'ignorerules' | 'bandwidth' | 'workspaces' | 'templates' | 'sensitive' | 'dailyreport'>('workspaces');
   const [shareToken, setShareToken] = useState<string | null>(getShareTokenFromPath());
   
   const networkStatus = useNetworkStatus();
@@ -386,6 +387,11 @@ const App: React.FC = () => {
   const deleteSensitiveProtection = useSyncStore(state => state.deleteSensitiveProtection);
   const toggleSensitiveProtection = useSyncStore(state => state.toggleSensitiveProtection);
   const verifyProtection = useSyncStore(state => state.verifyProtection);
+
+  const dailySyncReports = useSyncStore(state => state.dailySyncReports);
+  const markDailySyncReportAsRead = useSyncStore(state => state.markDailySyncReportAsRead);
+  const markAllDailySyncReportsAsRead = useSyncStore(state => state.markAllDailySyncReportsAsRead);
+  const generateDailySyncReport = useSyncStore(state => state.generateDailySyncReport);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -732,6 +738,15 @@ const App: React.FC = () => {
             onVerifyProtection={verifyProtection}
           />
         )}
+        {tab === 'dailyreport' && (
+          <DailySyncReportPanel
+            reports={dailySyncReports}
+            onMarkAsRead={markDailySyncReportAsRead}
+            onMarkAllAsRead={markAllDailySyncReportsAsRead}
+            onGenerateReport={generateDailySyncReport}
+            devices={displayDevices}
+          />
+        )}
       </>
     );
   };
@@ -793,6 +808,7 @@ const App: React.FC = () => {
           { key: 'snapshots', label: '目录快照' },
           { key: 'ignorerules', label: '忽略规则' },
           { key: 'sensitive', label: '敏感保护' },
+          { key: 'dailyreport', label: '同步日报' },
           { key: 'bandwidth', label: '带宽策略' },
           { key: 'templates', label: '同步模板' },
           { key: 'files', label: '文件列表' },

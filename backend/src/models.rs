@@ -162,3 +162,53 @@ pub struct UpdateShareLinkRequest {
     pub expires_at: Option<String>,
     pub max_access_count: Option<u32>,
 }
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct SyncResultSummary {
+    pub added: u32,
+    pub modified: u32,
+    pub deleted: u32,
+    pub conflicted: u32,
+    pub failed: u32,
+    pub retried: u32,
+    pub total_size: u64,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct FailedFileEntry {
+    pub path: String,
+    pub error: String,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct RetriedFileEntry {
+    pub path: String,
+    pub attempt: u32,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct SyncResultDetail {
+    pub added_files: Vec<String>,
+    pub modified_files: Vec<String>,
+    pub deleted_files: Vec<String>,
+    pub conflicted_files: Vec<String>,
+    pub failed_files: Vec<FailedFileEntry>,
+    pub retried_files: Vec<RetriedFileEntry>,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct DailySyncReport {
+    pub id: String,
+    pub date: String,
+    pub device_id: String,
+    pub device_name: String,
+    pub summary: SyncResultSummary,
+    pub details: SyncResultDetail,
+    pub generated_at: String,
+    pub read: bool,
+}
+
+#[derive(Deserialize)]
+pub struct GenerateDailyReportRequest {
+    pub device_id: String,
+}

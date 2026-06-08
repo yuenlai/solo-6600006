@@ -6,7 +6,7 @@ use std::sync::Mutex;
 mod models;
 mod services;
 
-use models::{RecycleBinItem, RestoreResult, SyncSchedule, ScheduleExecution, CreateScheduleRequest, UpdateScheduleRequest, ShareLink, CreateShareLinkRequest, ShareLinkAccessResult, UpdateShareLinkRequest};
+use models::{RecycleBinItem, RestoreResult, SyncSchedule, ScheduleExecution, CreateScheduleRequest, UpdateScheduleRequest, ShareLink, CreateShareLinkRequest, ShareLinkAccessResult, UpdateShareLinkRequest, DailySyncReport, SyncResultSummary, SyncResultDetail, GenerateDailyReportRequest};
 
 #[derive(Serialize)]
 struct HealthResponse {
@@ -39,6 +39,7 @@ struct AppState {
     schedules: Mutex<Vec<SyncSchedule>>,
     schedule_executions: Mutex<Vec<ScheduleExecution>>,
     share_links: Mutex<Vec<ShareLink>>,
+    daily_sync_reports: Mutex<Vec<DailySyncReport>>,
 }
 
 async fn list_recycle_bin(data: web::Data<AppState>) -> HttpResponse {
@@ -546,6 +547,96 @@ async fn list_file_share_links(
     HttpResponse::Ok().json(&file_links)
 }
 
+async fn list_daily_sync_reports(data: web::Data<AppState>) -> HttpResponse {
+    let reports = data.daily_sync_reports.lock().unwrap();
+    let sorted: Vec<&DailySyncReport> = reports.iter().take(30).collect();
+    HttpResponse::Ok().json(&sorted)
+}
+
+async fn get_daily_sync_report(
+    data: web::Data<AppState>,
+    path: web::Path<String>,
+) -> HttpResponse {
+    let report_id = path.into_inner();
+    let reports = data.daily_sync_reports.lock().unwrap();
+    
+    if let Some(report) = reports.iter().find(|r| r.id == report_id) {
+        HttpResponse::Ok().json(report)
+    } else {
+        HttpResponse::NotFound().json(serde_json::json!({
+            "success": false,
+            "message": "日报不存在"
+        }))
+    }
+}
+
+async fn mark_daily_sync_report_as_read(
+    data: web::Data<AppState>,
+    path: web::Path<String>,
+) -> HttpResponse {
+    let report_id = path.into_inner();
+    let mut reports = data.daily_sync_reports.lock().unwrap();
+    
+    if let Some(pos) = reports.iter().position(|r| r.id == report_id) {
+        reports[pos].read = true;
+        HttpResponse::Ok().json(&reports[pos])
+    } else {
+        HttpResponse::NotFound().json(serde_json::json!({
+            "success": false,
+            "message": "日报不存在"
+        }))
+    }
+}
+
+async fn mark_all_daily_sync_reports_as_read(data: web::Data<AppState>) -> HttpResponse {
+    let mut reports = data.daily_sync_reports.lock().unwrap();
+    for report in reports.iter_mut() {
+        report.read = true;
+    }
+    HttpResponse::Ok().json(serde_json::json!({
+        "success": true,
+        "message": "所有日报已标记为已读"
+    }))
+}
+
+async fn generate_daily_sync_report(
+    data: web::Data<AppState>,
+    req: web::Json<GenerateDailyReportRequest>,
+) -> HttpResponse {
+    let now = chrono::Utc::now();
+    let today = now.format("%Y-%m-%d").to_string();
+    
+    let report = DailySyncReport {
+        id: format!("dsr-{}", now.timestamp_millis()),
+        date: today,
+        device_id: req.device_id.clone(),
+        device_name: req.device_id.clone(),
+        summary: SyncResultSummary {
+            added: 0,
+            modified: 0,
+            deleted: 0,
+            conflicted: 0,
+            failed: 0,
+            retried: 0,
+            total_size: 0,
+        },
+        details: SyncResultDetail {
+            added_files: Vec::new(),
+            modified_files: Vec::new(),
+            deleted_files: Vec::new(),
+            conflicted_files: Vec::new(),
+            failed_files: Vec::new(),
+            retried_files: Vec::new(),
+        },
+        generated_at: now.to_rfc3339(),
+        read: false,
+    };
+    
+    let mut reports = data.daily_sync_reports.lock().unwrap();
+    reports.insert(0, report.clone());
+    HttpResponse::Created().json(report)
+}
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     env_logger::init();
@@ -556,6 +647,7 @@ async fn main() -> std::io::Result<()> {
         schedules: Mutex::new(Vec::new()),
         schedule_executions: Mutex::new(Vec::new()),
         share_links: Mutex::new(Vec::new()),
+        daily_sync_reports: Mutex::new(Vec::new()),
     });
     
     HttpServer::new(move || {
@@ -585,6 +677,11 @@ async fn main() -> std::io::Result<()> {
             .route("/api/share-links/{link_id}", web::delete().to(delete_share_link))
             .route("/api/share-links/access/{token}", web::get().to(access_share_link))
             .route("/api/share-links/file/{file_id}", web::get().to(list_file_share_links))
+            .route("/api/daily-sync-reports", web::get().to(list_daily_sync_reports))
+            .route("/api/daily-sync-reports", web::post().to(generate_daily_sync_report))
+            .route("/api/daily-sync-reports/{report_id}", web::get().to(get_daily_sync_report))
+            .route("/api/daily-sync-reports/{report_id}/read", web::post().to(mark_daily_sync_report_as_read))
+            .route("/api/daily-sync-reports/mark-all-read", web::post().to(mark_all_daily_sync_reports_as_read))
     })
     .bind("127.0.0.1:8080")?
     .run()

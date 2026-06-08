@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { SyncFile, SyncFolder, Device, SyncConflict, SyncActivity, FileVersion, RecycleBinItem, RestoreResult, DeviceWizardData, SpaceValidationResult, SyncSchedule, ScheduleExecution, ShareLink, LargeFileTransferItem, StorageAnalysisData, OfflineChange, SyncProgress, DirectorySnapshot, RestoreSnapshotResult, SelectiveRestoreSnapshotResult, SnapshotFileItem, IgnoreRule, IgnoreRuleMatchResult, Notification, Workspace, WorkspaceMember, WorkspaceFileActivity, WorkspaceRole, BandwidthStrategy, SyncTemplate, SensitiveProtection, ProtectionMode, ProtectionVerifyResult } from '../types';
+import { SyncFile, SyncFolder, Device, SyncConflict, SyncActivity, FileVersion, RecycleBinItem, RestoreResult, DeviceWizardData, SpaceValidationResult, SyncSchedule, ScheduleExecution, ShareLink, LargeFileTransferItem, StorageAnalysisData, OfflineChange, SyncProgress, DirectorySnapshot, RestoreSnapshotResult, SelectiveRestoreSnapshotResult, SnapshotFileItem, IgnoreRule, IgnoreRuleMatchResult, Notification, Workspace, WorkspaceMember, WorkspaceFileActivity, WorkspaceRole, BandwidthStrategy, SyncTemplate, SensitiveProtection, ProtectionMode, ProtectionVerifyResult, DailySyncReport, SyncResultSummary, SyncResultDetail } from '../types';
 import { offlineStorage } from '../utils/offlineStorage';
 
 const now = new Date();
@@ -192,6 +192,111 @@ const mockSensitiveProtections: SensitiveProtection[] = [
     confirmMessage: '设计文件目录受保护，确认继续？',
     createdAt: new Date(now.getTime() - 5 * 86400000).toISOString(),
     updatedAt: new Date(now.getTime() - 2 * 86400000).toISOString(),
+  },
+];
+
+const mockDailySyncReports: DailySyncReport[] = [
+  {
+    id: 'dsr-1',
+    date: new Date(now.getTime() - 0 * 86400000).toISOString().split('T')[0],
+    deviceId: 'd1',
+    deviceName: 'MacBook Pro',
+    summary: { added: 12, modified: 34, deleted: 3, conflicted: 2, failed: 1, retried: 2, totalSize: 1073741824 },
+    details: {
+      addedFiles: ['/docs/项目方案v3.docx', '/docs/会议记录0610.md', '/photos/screenshot_0608.png', '/data/metrics_june.csv'],
+      modifiedFiles: ['/docs/report.pdf', '/docs/notes.md', '/config/settings.json'],
+      deletedFiles: ['/tmp/cache_old.dat', '/backup/draft_v1.docx'],
+      conflictedFiles: ['/photos/img001.jpg', '/docs/项目方案.docx'],
+      failedFiles: [{ path: '/backup/backup.zip', error: '网络连接中断' }],
+      retriedFiles: [{ path: '/docs/report.pdf', attempt: 2 }],
+    },
+    generatedAt: new Date(now.getTime() - 2 * 3600000).toISOString(),
+    read: false,
+  },
+  {
+    id: 'dsr-2',
+    date: new Date(now.getTime() - 1 * 86400000).toISOString().split('T')[0],
+    deviceId: 'd1',
+    deviceName: 'MacBook Pro',
+    summary: { added: 8, modified: 21, deleted: 5, conflicted: 1, failed: 0, retried: 1, totalSize: 536870912 },
+    details: {
+      addedFiles: ['/docs/周报0610.docx', '/photos/team_photo.jpg'],
+      modifiedFiles: ['/docs/notes.md', '/data/report_q2.xlsx'],
+      deletedFiles: ['/temp/log_2026-06-06.txt'],
+      conflictedFiles: ['/config/app.conf'],
+      failedFiles: [],
+      retriedFiles: [{ path: '/docs/周报0610.docx', attempt: 1 }],
+    },
+    generatedAt: new Date(now.getTime() - 26 * 3600000).toISOString(),
+    read: true,
+  },
+  {
+    id: 'dsr-3',
+    date: new Date(now.getTime() - 0 * 86400000).toISOString().split('T')[0],
+    deviceId: 'd2',
+    deviceName: 'Ubuntu Server',
+    summary: { added: 5, modified: 18, deleted: 2, conflicted: 0, failed: 3, retried: 1, totalSize: 3221225472 },
+    details: {
+      addedFiles: ['/data/batch_output.csv', '/scripts/deploy.sh'],
+      modifiedFiles: ['/config/nginx.conf', '/data/access.log'],
+      deletedFiles: ['/tmp/session_old.dat'],
+      conflictedFiles: [],
+      failedFiles: [{ path: '/videos/render_output.mp4', error: '磁盘空间不足' }, { path: '/backup/db_dump.sql', error: '权限被拒绝' }, { path: '/logs/error.log', error: '文件被占用' }],
+      retriedFiles: [{ path: '/data/batch_output.csv', attempt: 2 }],
+    },
+    generatedAt: new Date(now.getTime() - 1 * 3600000).toISOString(),
+    read: false,
+  },
+  {
+    id: 'dsr-4',
+    date: new Date(now.getTime() - 2 * 86400000).toISOString().split('T')[0],
+    deviceId: 'd1',
+    deviceName: 'MacBook Pro',
+    summary: { added: 15, modified: 42, deleted: 7, conflicted: 3, failed: 2, retried: 4, totalSize: 2147483648 },
+    details: {
+      addedFiles: ['/docs/PRD_v2.pdf', '/design/mockup_v3.psd', '/data/user_study.csv'],
+      modifiedFiles: ['/docs/report.pdf', '/config/settings.json'],
+      deletedFiles: ['/archive/old_backup.zip', '/temp/debug.log'],
+      conflictedFiles: ['/docs/项目方案.docx', '/photos/img001.jpg', '/config/app.conf'],
+      failedFiles: [{ path: '/backup/db_dump.sql', error: '网络超时' }, { path: '/videos/demo.mp4', error: '文件过大被拒绝' }],
+      retriedFiles: [{ path: '/docs/PRD_v2.pdf', attempt: 2 }, { path: '/config/settings.json', attempt: 3 }],
+    },
+    generatedAt: new Date(now.getTime() - 50 * 3600000).toISOString(),
+    read: true,
+  },
+  {
+    id: 'dsr-5',
+    date: new Date(now.getTime() - 1 * 86400000).toISOString().split('T')[0],
+    deviceId: 'd2',
+    deviceName: 'Ubuntu Server',
+    summary: { added: 3, modified: 12, deleted: 1, conflicted: 0, failed: 0, retried: 0, totalSize: 268435456 },
+    details: {
+      addedFiles: ['/scripts/monitor.py'],
+      modifiedFiles: ['/config/nginx.conf', '/data/metrics.json'],
+      deletedFiles: ['/tmp/cleanup.dat'],
+      conflictedFiles: [],
+      failedFiles: [],
+      retriedFiles: [],
+    },
+    generatedAt: new Date(now.getTime() - 25 * 3600000).toISOString(),
+    read: true,
+  },
+  {
+    id: 'dsr-6',
+    date: new Date(now.getTime() - 3 * 86400000).toISOString().split('T')[0],
+    deviceId: 'd3',
+    deviceName: 'Windows Desktop',
+    summary: { added: 2, modified: 8, deleted: 1, conflicted: 1, failed: 1, retried: 1, totalSize: 134217728 },
+    details: {
+      addedFiles: ['/docs/设计评审记录.docx'],
+      modifiedFiles: ['/docs/report.pdf'],
+      deletedFiles: ['/temp/scratch.txt'],
+      conflictedFiles: ['/docs/会议纪要.md'],
+      failedFiles: [{ path: '/backup/weekly.zip', error: '目标目录不存在' }],
+      retriedFiles: [{ path: '/docs/设计评审记录.docx', attempt: 1 }],
+    },
+    generatedAt: new Date(now.getTime() - 72 * 3600000).toISOString(),
+    read: true,
   },
 ];
 
@@ -587,6 +692,12 @@ interface SyncState {
   toggleSensitiveProtection: (id: string) => void;
   verifyProtection: (id: string, input: string) => ProtectionVerifyResult;
   checkDirectoryProtection: (directoryPath: string) => SensitiveProtection | null;
+  dailySyncReports: DailySyncReport[];
+  setDailySyncReports: (reports: DailySyncReport[]) => void;
+  markDailySyncReportAsRead: (id: string) => void;
+  markAllDailySyncReportsAsRead: () => void;
+  getDailySyncReport: (date: string, deviceId?: string) => DailySyncReport | undefined;
+  generateDailySyncReport: (deviceId: string) => DailySyncReport;
 }
 
 export const useSyncStore = create<SyncState>((set, get) => ({
@@ -616,6 +727,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
   bandwidthStrategies: [...mockBandwidthStrategies],
   syncTemplates: [...mockSyncTemplates],
   sensitiveProtections: [...mockSensitiveProtections],
+  dailySyncReports: [...mockDailySyncReports],
   versionHistory: {
     isOpen: false,
     fileId: null,
@@ -1722,5 +1834,67 @@ export const useSyncStore = create<SyncState>((set, get) => ({
   checkDirectoryProtection: (directoryPath) => {
     const protections = get().sensitiveProtections;
     return protections.find(p => p.directoryPath === directoryPath && p.enabled) || null;
+  },
+
+  setDailySyncReports: (reports) => set({ dailySyncReports: reports }),
+
+  markDailySyncReportAsRead: (id) => set((state) => ({
+    dailySyncReports: state.dailySyncReports.map(r =>
+      r.id === id ? { ...r, read: true } : r
+    ),
+  })),
+
+  markAllDailySyncReportsAsRead: () => set((state) => ({
+    dailySyncReports: state.dailySyncReports.map(r => ({ ...r, read: true })),
+  })),
+
+  getDailySyncReport: (date, deviceId) => {
+    const reports = get().dailySyncReports;
+    if (deviceId) {
+      return reports.find(r => r.date === date && r.deviceId === deviceId);
+    }
+    return reports.find(r => r.date === date);
+  },
+
+  generateDailySyncReport: (deviceId) => {
+    const state = get();
+    const device = state.devices.find(d => d.id === deviceId);
+    const today = new Date().toISOString().split('T')[0];
+    const todayActivities = state.activities.filter(a => a.timestamp.startsWith(today));
+
+    const added = todayActivities.filter(a => a.action === 'upload' && a.status === 'success').length;
+    const modified = todayActivities.filter(a => a.action === 'modify' && a.status === 'success').length;
+    const deleted = todayActivities.filter(a => a.action === 'delete' && a.status === 'success').length;
+    const conflicted = todayActivities.filter(a => a.status === 'conflict').length;
+    const failed = todayActivities.filter(a => a.status === 'failed').length;
+    const retried = state.largeFileTransfers.filter(t => t.retryCount > 0).length;
+    const totalSize = todayActivities.reduce((sum, a) => sum + (a.size || 0), 0);
+
+    const summary: SyncResultSummary = { added, modified, deleted, conflicted, failed, retried, totalSize };
+    const details: SyncResultDetail = {
+      addedFiles: todayActivities.filter(a => a.action === 'upload' && a.status === 'success').map(a => a.filePath),
+      modifiedFiles: todayActivities.filter(a => a.action === 'modify' && a.status === 'success').map(a => a.filePath),
+      deletedFiles: todayActivities.filter(a => a.action === 'delete' && a.status === 'success').map(a => a.filePath),
+      conflictedFiles: todayActivities.filter(a => a.status === 'conflict').map(a => a.filePath),
+      failedFiles: todayActivities.filter(a => a.status === 'failed').map(a => ({ path: a.filePath, error: a.errorMessage || '未知错误' })),
+      retriedFiles: state.largeFileTransfers.filter(t => t.retryCount > 0).map(t => ({ path: t.filePath, attempt: t.retryCount })),
+    };
+
+    const report: DailySyncReport = {
+      id: `dsr-${Date.now()}`,
+      date: today,
+      deviceId,
+      deviceName: device?.name || '未知设备',
+      summary,
+      details,
+      generatedAt: new Date().toISOString(),
+      read: false,
+    };
+
+    set((state) => ({
+      dailySyncReports: [report, ...state.dailySyncReports],
+    }));
+
+    return report;
   },
 }));

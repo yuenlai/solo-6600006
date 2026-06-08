@@ -473,3 +473,33 @@ export interface ProtectionVerifyResult {
   verified: boolean;
   message: string;
 }
+
+export interface SyncResultSummary {
+  added: number;
+  modified: number;
+  deleted: number;
+  conflicted: number;
+  failed: number;
+  retried: number;
+  totalSize: number;
+}
+
+export interface SyncResultDetail {
+  addedFiles: string[];
+  modifiedFiles: string[];
+  deletedFiles: string[];
+  conflictedFiles: string[];
+  failedFiles: { path: string; error: string }[];
+  retriedFiles: { path: string; attempt: number }[];
+}
+
+export interface DailySyncReport {
+  id: string;
+  date: string;
+  deviceId: string;
+  deviceName: string;
+  summary: SyncResultSummary;
+  details: SyncResultDetail;
+  generatedAt: string;
+  read: boolean;
+}
